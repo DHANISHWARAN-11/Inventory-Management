@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block content %}
+<h1 style="text-align:center">Add/Reduce Transaction</h1>
+  <form method="POST">
+    {% csrf_token %}
+    {% include 'includes/error.html'%}
+    <div class="mb-3">
+      <label for="category">Category</label>
+      <input type="text" class="form-control" id="category" name="category" value="{{ c |default:'' }}"readonly>
+    </div>
+    
+     <div class="mb-3">
+      <label for="item">Item</label>
+      <input type="text" class="form-control" id="item" value="{{ i |default:'' }}" readonly>
+      <input type="hidden" name="item" value="{{ items.id }}"> 
+    </div>
+
+     <div class="mb-3">
+      <label for="transaction_type">Transaction Type</label>
+      <input type="text" class="form-control" name="transaction_type" value="{{ t |default:'' }}" readonly>
+    </div>
+
+    <div class="mb-3">
+      <label for="quantity">Quantity</label>
+      <input type="number" class="form-control" id="quantity" name="quantity" min="1" >
+    </div>
+    <button type="submit" class="btn btn-primary mt-3">Submit</button>
+  </form>
+
+  <script>
+  const accessToken = localStorage.getItem('access');
+
+  $.ajax({
+    url: '/api/protected/',  // your protected API
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken
+    },
+    success: function (data) {
+      console.log('Protected data:', data);
+    },
+    error: function () {
+      console.log('Unauthorized or token expired');
+    }
+  });
+</script>
+{% endblock %}

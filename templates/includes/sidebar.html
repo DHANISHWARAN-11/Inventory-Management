@@ -1,0 +1,17 @@
+<div class="offcanvas offcanvas-start" id="sidebar" tabindex="-1" data-bs-backdrop="false">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title">Inventory Tracker</h5>
+    <hr>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+  </div>
+  <div class="offcanvas-body">
+    <ul class="nav flex-column">
+      <li class="nav-item"><a class="nav-link active" href="{% url 'dashboard' %}">Home</a></li>
+      <li class="nav-item"><a class="nav-link active" href="{% url 'add_category' %}">Add Category</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'add_items' %}">Add Item</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'add_reduce_stock' %}">Add/Reduce Stock</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'stock_transaction' %}">Transaction</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'logout' %}">Logout</a></li>
+    </ul>
+  </div>
+</div>

@@ -1,0 +1,81 @@
+{% extends 'base.html'%}
+{% block content %}
+  <div class="text-center mt-4">
+    <h1 class="fw-bold">Welcome to Mini Inventory Tracker</h1>
+    <p class="text-muted">Manage items, add stock, and monitor inventory in real-time.</p>
+  </div>
+
+  <!-- Categories -->
+  {% include 'includes/error.html'%}
+  <div class="row mt-5">
+    {% for category in categories %}
+    <div class="col-md-4 mb-4">
+      <div class="card shadow-sm h-100">
+        <div class="card-body text-center">
+          <h5 class="card-title">
+            <a href="{% url 'items' category_id=category.id %}" class="text-decoration-none text-primary">
+              {{ category.name }} ({{ category.item_count }})
+        </a>
+          </h5>
+          <p class="card-text text-muted">{{ category.description }}</p>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <!-- Items Table -->
+  
+  {% if items %}
+    <div class="card mt-5 shadow-sm">
+      <div class="card-header bg-primary text-white">
+        {% for category in categories %}
+          {% if category.id == items.0.category_id %}
+            <h5 class="mb-0">Items in {{ category.name }} Category</h5>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="card-body">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Item Name</th>
+              <th>Current Stock</th>
+              <th>Add/Reduce</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in items %}
+            <tr>
+              <td>{{ item.name }}</td>
+              <td>{{ item.current_stock }}</td>
+              <td> <span><a href="{%url 'add_reduce_stock_alter' category=c_name item_name=item.name type="add"%}">Add</a></span>
+                <span><a href="{%url 'add_reduce_stock_alter' category=c_name item_name=item.name type="reduce"%}">Reduce</a></span> </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    {% endif %}
+
+    
+<script>
+  const accessToken = localStorage.getItem('access');
+
+  $.ajax({
+    url: '/api/protected/',  // your protected API
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken
+    },
+    success: function (data) {
+      console.log('Protected data:', data);
+    },
+    error: function () {
+      console.log('Unauthorized or token expired');
+    }
+  });
+</script>
+{% endblock%}

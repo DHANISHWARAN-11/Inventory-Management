@@ -1,0 +1,37 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link href="{% static 'error_style.css' %}" rel="stylesheet">
+</head>
+<body>
+
+<!-- field error -->
+{% for field in form %}
+    {% if field.errors %}
+        <div class = "col-12 errors-message">
+            <span class = "fw-bold">{{field.label}}</span>
+            {% for error in field.errors %}
+                <span class="text-danger errors-message">{{error}}</span>
+            {% endfor %}
+        </div>
+    {% endif %}
+{% endfor %}
+<!-- Non Field Errors -->
+{% for error in form.non_field_errors %}
+    <div class="alert alert-danger error-message">
+        <span class="text-danger">{{ error }}</span>
+    </div>
+{% endfor %}
+<!-- Success-->
+{% if messages %}
+  {% for message in messages %}
+    <div class="flash-message  {% if message.tags == 'success' %}success{% else %}error{% endif %}">
+      {{ message }}
+    </div>
+  {% endfor %}
+{% endif %}
+</body>
+</html>

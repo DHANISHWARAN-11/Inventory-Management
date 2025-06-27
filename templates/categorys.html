@@ -1,0 +1,35 @@
+{% extends 'base.html'%}
+{% load static%}
+{% block content %}
+<h1  style="text-align:center">Add Category</h1>
+<form method = "POST">
+    {% include 'includes/error.html'%}
+    {% csrf_token %}
+    <div class="mb-3">
+        <label for="category">Category</label>
+        <input type="text" id="category" name="name" value = "{{form.name.value | default:''}}"><br>
+        <label for="description">Description</label>
+        <input type="text" id="description" name="description" value="{{form.description.value | default:''}}"><br>
+        
+    </div>
+        <button type="submit" class="btn btn-primary mt-3">Submit</button>
+</form>
+
+<script>
+  const accessToken = localStorage.getItem('access');
+
+  $.ajax({
+    url: '/api/protected/',  // your protected API
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken
+    },
+    success: function (data) {
+      console.log('Protected data:', data);
+    },
+    error: function () {
+      console.log('Unauthorized or token expired');
+    }
+  });
+</script>
+{% endblock %}

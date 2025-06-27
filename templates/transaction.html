@@ -1,0 +1,63 @@
+{% extends 'base.html'%}
+{% block content %}
+{% if transactions %}
+  <div class="card mt-5 shadow-sm">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">Transaction Histroy</h5>
+    </div>
+    <div class="card-body">
+      <table class="table" style = "text-align:center">
+        <thead>
+          <tr>
+            <th>Item Name</th>
+            <th>Quantity</th>
+            <th>Transaction Type</th>
+            <th>Date</th>
+            <th>Time</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for transaction in transactions %}
+          <tr>
+            <td>{{ transaction.item }}</td>
+            <td>{{ transaction.quantity }}</td>
+            <td>
+            <span class="{% if transaction.transaction_type == 'add' %}
+                add
+            {% else %}
+                reduce
+            {% endif %}">
+            {{transaction.transaction_type}}
+            </span></td>
+            <td>{{transaction.transaction_date|date:"d/M/Y"}}</td>
+            <td>{{transaction.transaction_date|time:"H:i:s"}}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <a href="{% url 'download_stock_report' %}" class="btn btn-primary">Download Stock Report</a>
+
+    </div>
+  </div>
+  {% else %}
+  <h1> No Transactions Done Yet</h1>
+  {% endif %}
+
+  <script>
+  const accessToken = localStorage.getItem('access');
+
+  $.ajax({
+    url: '/api/protected/',  // your protected API
+    method: 'GET',
+    headers: {
+      'Authorization': 'Bearer ' + accessToken
+    },
+    success: function (data) {
+      console.log('Protected data:', data);
+    },
+    error: function () {
+      console.log('Unauthorized or token expired');
+    }
+  });
+</script>
+{% endblock %}
