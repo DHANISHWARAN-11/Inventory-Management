@@ -1,35 +1,76 @@
-{% extends 'base.html'%}
-{% load static%}
+{% extends 'base.html' %}
+{% load static %}
+
 {% block content %}
-<h1  style="text-align:center">Add Category</h1>
-<form method = "POST">
-    {% include 'includes/error.html'%}
-    {% csrf_token %}
+<h1 style="text-align:center">Add Category</h1>
+
+<form id="add-category-form">
+    
     <div class="mb-3">
         <label for="category">Category</label>
-        <input type="text" id="category" name="name" value = "{{form.name.value | default:''}}"><br>
-        <label for="description">Description</label>
-        <input type="text" id="description" name="description" value="{{form.description.value | default:''}}"><br>
-        
+        <input type="text" id="category" name="name" class="form-control">
+        <div class="text-danger" id="name-error"></div>
+
+        <label for="description" class="mt-3">Description</label>
+        <input type="text" id="description" name="description" class="form-control">
+        <div class="text-danger" id="description-error"></div>
     </div>
-        <button type="submit" class="btn btn-primary mt-3">Submit</button>
+
+    <button type="submit" class="btn btn-primary mt-3">Submit</button>
 </form>
 
+
 <script>
+  $('#add-category-form').submit(function (e) {
+  e.preventDefault();
+
+  const name = $('#category').val();
+  const description = $('#description').val();
   const accessToken = localStorage.getItem('access');
+  const csrfToken = $('input[name=csrfmiddlewaretoken]').val();
+
+
+  // ✅ If not logged in
+  if (!accessToken) {
+    alert("You are not logged in. Please login.");
+    window.location.href = "/";
+    return;
+  }
 
   $.ajax({
-    url: '/api/protected/',  // your protected API
-    method: 'GET',
+    url: '/api/categories/',
+    method: 'POST',
+    contentType: 'application/json',  // IMPORTANT: set JSON type
+    data: JSON.stringify({ 
+      name: name,
+      description: description
+    }),
     headers: {
-      'Authorization': 'Bearer ' + accessToken
+      'Authorization': 'Bearer ' + accessToken,
+      'X-CSRFToken': csrfToken
     },
-    success: function (data) {
-      console.log('Protected data:', data);
+    success: function (response) {
+      alert('Category added successfully!');
+      window.location.href = '/dashboard/';
     },
-    error: function () {
-      console.log('Unauthorized or token expired');
+    error: function (xhr) {
+      if (xhr.status === 401 || xhr.status === 403) {
+        alert("Session expired. Please login again.");
+        localStorage.removeItem("access");
+        localStorage.removeItem("refresh");
+        window.location.href = "/";
+        return;
+      }
+
+      const errors = xhr.responseJSON || {};
+      if (errors.name) {
+        $('#name-error').text(errors.name[0]);
+      }
+      if (errors.description) {
+        $('#description-error').text(errors.description[0]);
+      }
     }
-  });
+  });
+});
 </script>
 {% endblock %}

@@ -42,24 +42,6 @@ class RegisterForm(forms.ModelForm):
         if password1 != password2:
             raise forms.ValidationError("Password doesn't match")
         
-class CategoryForm(forms.ModelForm):
-    name = forms.CharField(label="Category",max_length=100,required=True)
-    description = forms.CharField(label ="Description",max_length=150,required=False)
-
-    class Meta:
-        model = Category
-        fields = ['name','description']
-
-    def clean(self):
-        cleaned_data = super().clean()
-        category = str(cleaned_data.get('name')).title()
-        if Category.objects.filter(name = category).exists():
-            raise forms.ValidationError("This category is already exist")
-        
-    def clean_description(self):
-        return self.cleaned_data.get('description') or None
-
-
 class ItemForm(forms.ModelForm):
     name = forms.CharField(label = "Name", max_length=10,required=True)
     category = forms.ModelChoiceField(label = "Category",queryset = Category.objects.all(),required = True)
