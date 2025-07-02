@@ -1,61 +1,140 @@
 {% extends 'base.html' %}
 {% load static %}
 {% block content %}
-<h1 style="text-align:center">Add/Reduce Transaction</h1>
-  <form method="POST">
-    {% csrf_token %}
-    {% include 'includes/error.html'%}
-    <div class="mb-3">
-      <label for="category">Category</label>
-      <select name="category" class="form-control" onchange="this.form.submit()">
-        <option value="">Select</option>
-        {% for cat in categories %}
-          <option value="{{ cat.id }}" {% if cat.id|stringformat:"s" == selected_category_id %}selected{% endif %}>{{ cat.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
-    
-     <div class="mb-3">
-      <label for="item">Item</label>
-      <select class="form-control" id="item" name="item">
-        <option value="">Select</option>
-        {% for item in items %}
-          <option value="{{ item.id }}">{{ item.name }}</option>
-        {% endfor %}
-      </select>
-    </div>
 
-     <div class="mb-3">
-      <label for="transaction_type">Transaction Type</label>
-      <select class="form-control" name="transaction_type">
-        <option value="">Select</option>
-        <option value="add">Add</option>
-        <option value="reduce">Reduce</option>
-      </select>
-    </div>
+<form id="transaction-form">
+  <h2 style="text-align:center">Add/Reduce Transaction</h2>
+  <div class="mb-3">
+    <label for="category">Category</label>
+    <select name="category" id="category" class="form-control">
+      <option value="">Select</option>
+      <!-- Loaded via JS -->
+    </select>
+  </div>
 
-    <div class="mb-3">
-      <label for="quantity">Quantity</label>
-      <input type="number" class="form-control" id="quantity" name="quantity" min="1" >
-    </div>
-    <button type="submit" class="btn btn-primary mt-3">Submit</button>
-  </form>
+  <div class="mb-3">
+    <label for="item">Item</label>
+    <select class="form-control" id="item" name="item">
+      <option value="">Select</option>
+      <!-- Loaded via JS -->
+    </select>
+  </div>
 
-  <script>
-  const accessToken = localStorage.getItem('access');
+  <div class="mb-3">
+    <label for="transaction_type">Transaction Type</label>
+    <select class="form-control" id="transaction_type" name="transaction_type">
+      <option value="">Select</option>
+      <option value="add">Add</option>
+      <option value="reduce">Reduce</option>
+    </select>
+  </div>
 
-  $.ajax({
-    url: '/api/protected/',  // your protected API
-    method: 'GET',
-    headers: {
-      'Authorization': 'Bearer ' + accessToken
-    },
-    success: function (data) {
-      console.log('Protected data:', data);
-    },
-    error: function () {
-      console.log('Unauthorized or token expired');
+  <div class="mb-3">
+    <label for="quantity">Quantity</label>
+    <input type="number" class="form-control" id="quantity" name="quantity" min="1">
+  </div>
+
+  <button type="submit" class="btn btn-primary mt-3">Submit</button>
+</form>
+
+<script>
+  let lastTransaction = {};
+
+  $(document).ready(function () {
+    const accessToken = localStorage.getItem("access");
+
+    if (!accessToken) {
+      alert("Login required.");
+      window.location.href = "/";
+      return;
     }
-  });
+
+    // ✅ Load Categories
+    $.ajax({
+      url: "/api/categories/",
+      method: "GET",
+      headers: { Authorization: "Bearer " + accessToken },
+      success: function (categories) {
+        categories.forEach(category => {
+          $("#category").append(`<option value="${category.id}">${category.name}</option>`);
+        });
+      }
+    });
+
+    // ✅ Load Items on category change
+    $('#category').change(function () {
+      const categoryId = $(this).val();
+      $('#item').empty().append('<option value="">Select</option>');
+
+      if (!categoryId) return;
+
+      $.ajax({
+        url: `/api/items/?category_id=${categoryId}`,
+        method: "GET",
+        headers: { 
+          Authorization: "Bearer " + accessToken 
+        },
+        success: function (items) {
+          items.forEach(item => {
+            $('#item').append(`<option value="${item.id}">${item.name}</option>`);
+          });
+        }
+      });
+    });
+  
+    // ✅ Submit Transaction via API
+    $('#transaction-form').submit(function (e) {
+      e.preventDefault();
+
+      const item = $('#item').val();
+      const transaction_type = $('#transaction_type').val();
+      const quantity = parseInt($('#quantity').val());
+
+      if (!item || !transaction_type || !quantity) {
+        alert("All fields are required.");
+        return;
+      }
+  
+      // ✅ Frontend duplicate prevention
+      if (
+        lastTransaction.item === item &&
+        lastTransaction.type === transaction_type &&
+        lastTransaction.quantity === quantity
+      ) {
+        alert("You already submitted this transaction. Change values to proceed.");
+        return;
+      }
+  
+
+      $.ajax({
+        url: "/api/add_reduce_stock/",
+        method: "POST",
+        contentType: "application/json",
+        data: JSON.stringify({
+          item: item,
+          transaction_type: transaction_type,
+          quantity: quantity
+        }),
+        headers: {
+          Authorization: "Bearer " + accessToken,
+          
+        },
+        success: function (result) {
+          alert(result.message);
+          lastTransaction = { item, type: transaction_type, quantity };
+          $('#transaction-form')[0].reset();  // clear form
+        },
+        error: function (xhr) {
+          if (xhr.status === 401 || xhr.status === 403) {
+            alert("Session expired. Please login again.");
+            localStorage.clear();
+            window.location.href = "/";
+          } else {
+            alert("Error: " + JSON.stringify(xhr.responseJSON));
+          }
+        }
+      });
+    });
+  });
 </script>
 {% endblock %}

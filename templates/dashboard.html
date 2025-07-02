@@ -19,7 +19,6 @@
 
 <script>
   const accessToken = localStorage.getItem('access');
-  console.log(accessToken)
   if (!accessToken) {
     alert("You are not logged in. Please login.");
     window.location.href = "/";
@@ -77,12 +76,13 @@
     $('#item-container').html(''); // clear previous items
 
     $.ajax({
-      url: `/api/items/${categoryId}/`,
+      url: `/api/items?category_id=${categoryId}`,
       method: 'GET',
       headers: {
         'Authorization': 'Bearer ' + accessToken
       },
       success: function (items) {
+        console.log(items)
         if (items.length === 0) {
           $('#item-container').html(`<p class="text-center text-muted">No items in "${categoryName}" category.</p>`);
           return;

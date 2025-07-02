@@ -1,45 +1,142 @@
-{% extends 'base.html'%}
-{% load static%}
+{% extends 'base.html' %}
+{% load static %}
 {% block content %}
-<h1  style="text-align:center">Add Items</h1>
-<form method = "POST">
-    {% include 'includes/error.html'%}
-    {% csrf_token %}
-    <div class="mb-3">
-        <label for="category">Category</label>
-        <select class="form-control" id="category" name="category">
-            <option value ="">select</option><br>
-            {% for category in categories%}
-            <option value ="{{category.id}}">{{category.name}}</option><br>
-            {% endfor %}
-        </select>
-        <label for="name">Item name</label>
-        <input type="text" id="name" name="name" value = "{{form.name.value | default:''}}"><br>
-        <label for="description">description</label>
-        <input type="text" id="description" name="description" value="{{form.description.value | default:''}}"><br>
-        <label for="unit">Unit</label>
-        <input type="text" id="unit" name="unit"  ><br>
-        <label for="current_stock">Current_stock</label>
-        <input type="text" id="current_stock" name="current_stock">
-    </div>
-        <button type="submit" class="btn btn-primary mt-3">Submit</button>
+
+
+<form method="POST" id="add-item-form">
+  <h1 style="text-align:center">Add Items</h1>
+  {% csrf_token %}
+  {% include 'includes/error.html' %}
+
+  <div class="mb-3">
+    <label for="category">Category</label>
+    <select class="form-control" id="category" name="category">
+      <option value="">Select</option>
+    </select>
+
+    <label for="name">Item Name</label>
+    <input type="text" id="name" name="name"><br>
+
+    <label for="description">Description</label>
+    <input type="text" id="description" name="description"><br>
+
+    <label for="unit">Unit</label>
+    <input type="text" id="unit" name="unit"><br>
+
+    <label for="current_stock">Current Stock</label>
+    <input type="number" id="current_stock" name="current_stock" min="0"><br>
+  </div>
+
+  <button type="submit" class="btn btn-primary mt-3">Submit</button>
 </form>
 
 <script>
-  const accessToken = localStorage.getItem('access');
+  let itemNamesInCategory = []; // ✅ Global array to hold item names
 
-  $.ajax({
-    url: '/api/protected/',  // your protected API
-    method: 'GET',
-    headers: {
-      'Authorization': 'Bearer ' + accessToken
-    },
-    success: function (data) {
-      console.log('Protected data:', data);
-    },
-    error: function () {
-      console.log('Unauthorized or token expired');
+  $(document).ready(function () {
+    const accessToken = localStorage.getItem("access");
+
+    // ✅ Load categories on page load
+    $.ajax({
+      url: '/api/categories/',
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + accessToken
+      },
+      success: function (data) {
+        const categorySelect = $('#category');
+        data.forEach(function (category) {
+          categorySelect.append(`<option value="${category.id}">${category.name}</option>`);
+        });
+      },
+      error: function () {
+        alert("Failed to load categories.");
+      }
+    });
+
+    // ✅ Fetch item names when category changes
+    $('#category').change(function () {
+      const selectedCategoryId = $(this).val();
+      itemNamesInCategory = [];
+
+      if (!selectedCategoryId) return;
+
+      $.ajax({
+        url: `/api/items/?category_id=${selectedCategoryId}`,
+        method: 'GET',
+        headers: {
+          'Authorization': 'Bearer ' + accessToken
+        },
+        success: function (data) {
+          itemNamesInCategory = data.map(item => item.name.toLowerCase());
+        },
+        error: function () {
+          alert("Failed to load items for selected category.");
+        }
+      });
+    });
+  });
+
+  // ✅ Form submission with duplicate name check
+  $('#add-item-form').submit(function (e) {
+    e.preventDefault();
+
+    const category = $('#category').val();
+    const name = $('#name').val().toLowerCase(); // lowercase check
+    const description = $('#description').val();
+    const unit = $('#unit').val();
+    const current_stock = $('#current_stock').val();
+    const accessToken = localStorage.getItem('access');
+    const csrfToken = $('input[name=csrfmiddlewaretoken]').val();
+
+    // ✅ Validations
+    if (!accessToken) {
+      alert("You are not logged in. Please login.");
+      window.location.href = "/";
+      return;
     }
-  });
+
+    if (!category || !name || !unit) {
+      alert("Please fill all required fields");
+      return;
+    }
+
+    // ✅ Check for duplicate item name
+    if (itemNamesInCategory.includes(name)) {
+      alert(`Item "${name}" already exists in this category.`);
+      return;
+    }
+
+    // ✅ Submit via AJAX
+    $.ajax({
+      url: '/api/add_items/',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        category: category,
+        name: name,
+        description: description ? description : null,
+        unit: unit,
+        current_stock: current_stock ? parseInt(current_stock) : 0
+      }),
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+        'X-CSRFToken': csrfToken
+      },
+      success: function (response) {
+        alert(name + ' added successfully!');
+        window.location.href = '/dashboard/';
+      },
+      error: function (xhr) {
+        if (xhr.status === 401 || xhr.status === 403) {
+          alert("Session expired. Please login again.");
+          localStorage.clear();
+          window.location.href = "/";
+        } else {
+          alert("Error: " + JSON.stringify(xhr.responseJSON));
+        }
+      }
+    });
+  });
 </script>
 {% endblock %}

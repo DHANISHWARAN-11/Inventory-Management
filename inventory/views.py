@@ -1,24 +1,17 @@
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
-from rest_framework.decorators import api_view 
+from rest_framework.decorators import  APIView
 from rest_framework.response import Response
-from inventory.serializer import AddReduceSerializer, CategorySerializer, ItemSerializer
-from .models import Category, Item, Stock_Transaction
-from .forms import AddReduceForm, ItemForm , AddReduceAlterForm , LoginForm , RegisterForm
-from django.contrib.auth.models import User
-from django.contrib.auth import authenticate, login as auth_login
+from inventory.models import Category, Item, Stock_Transaction
+from inventory.serializer import  AddItemCrudSerializer, AddReduceStockCrudSerializer, CategoryCrudSerializer, CategoryListSerializer, ItemListSerializer,DashboardAddReduceCrudSerializer, TransactionListSerializer
+from .forms import RegisterForm
 from django.contrib import messages
 from django.shortcuts import redirect
-import random , csv
+import csv 
 from django.db.models import Sum, Count, Avg, Max, Min
 from rest_framework import status
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-import json
+from rest_framework.pagination import PageNumberPagination
 # Create your views here.
-
-def login(request):
-    return render(request,'login.html')
 
 def register(request):
     form = RegisterForm()
@@ -31,136 +24,108 @@ def register(request):
             user.save()
             messages.success(request, "Registered Succesfully")
             return redirect('login')
-    return render(request, 'register.html', {'form': form})
+    return render(request, 'register.html',{'form':form})
 
-# dashboard
-@api_view(['GET' , 'POST'])
-def category_list(request):
-    if request.method  == 'GET':
-       categories = Category.objects.annotate(item_count=Count('item')).order_by('id')
-       serializer = CategorySerializer(categories, many=True)
+def login(request):
+    return render(request,'login.html')
+
+# Dashboard Rendering
+def dashboard(request):
+    return render(request, 'dashboard.html')
+class CategoryListAPIView(APIView):
+    def get(self, request):
+        categories = Category.objects.annotate(item_count=Count('item')).order_by('id')
+        serializer = CategoryListSerializer(categories, many=True)
+        return Response(serializer.data)
+class ItemListAPIView(APIView):
+    def get(self, request):
+       category_id = request.GET.get("category_id")
+       items = Item.objects.filter(category_id=category_id)
+       serializer = ItemListSerializer(items, many=True)
        return Response(serializer.data)
-    elif request.method == 'POST':
-       serializer = CategorySerializer(data=request.data)
-       if serializer.is_valid():
+
+# Add Category
+def add_category(request):
+    return render(request, 'categorys.html')
+class CategoryCrudAPIView(APIView):
+    def post(self, request):
+        serializer = CategoryCrudSerializer(data=request.data)
+        if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-       return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-def dashboard(request):
-       if not request.user.is_authenticated:
-              return redirect('login') 
-       return render(request, 'dashboard.html')
-def add_category(request):
-       if not request.user.is_authenticated:
-              return redirect('login')
-       return render(request, 'categorys.html')
-
-
-
-
-@api_view(['GET'])
-def items_by_category(request, category_id):
-    items = Item.objects.filter(category_id=category_id)
-    serializer = ItemSerializer(items, many=True)
-    return Response(serializer.data)
-def items(request, category_id):
-    if not request.user.is_authenticated:
-              return redirect('login')
-    return render(request, 'dashboard.html')
-
-
-
-
-
-
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+  
+# Add Item 
 def add_items(request):
-       if not request.user.is_authenticated:
-              return redirect('login')
-       form = ItemForm()
-       categories = Category.objects.all()
-       if request.method == 'POST':
-              form = ItemForm(request.POST)
-              if form.is_valid():
-                     sku = ''
-                     category = str(form.cleaned_data['category'])
-                     name = str(form.cleaned_data['name']).lower()
-                     sku += category[0:2].lower()+name[0:2]
-                     number = str(random.randint(1000,9999))
-                     sku += number
-                     item = form.save(commit = False)
-                     item.sku = sku
-                     item.name = name
-                     item.save()
-                     messages.success(request, f'Items in {category} Submitted Successfully')
-                     return redirect('dashboard')
-       return render(request, 'add_items.html',{'categories':categories,'form':form}) 
+    return render(request, 'add_items.html') 
 
+class AddItemCrudAPIView(APIView):
+    def post(self, request):
+        serializer = AddItemCrudSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({'status': 1, 'message': 'Item added successfully', 'data': serializer.data}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+def add_reduce_stock_another(request, category=None, item_name=None, type=None):
+    """
+    Renders the Add/Reduce Stock form with or without pre-filled values.
+    """
+
+    context = {}
+
+    if category and item_name and type:
+        try:
+            # Get item based on category and name
+            item = get_object_or_404(Item, name=item_name, category__name=category)
+            context['c'] = category
+            context['i'] = item_name
+            context['t'] = type
+            context['items'] = item  # in case you want to use item.id
+        except Item.DoesNotExist:
+            context['error'] = "Item not found."
+
+    return render(request, 'add_reduce_alter.html', context)
+
+class DashboardAddReduceCrudAPIView(APIView):
+    def post(self, request):
+        serializer = DashboardAddReduceCrudSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Stock updated successfully!"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+# Add Reduce Stock
 def add_reduce_stock(request):
-       if not request.user.is_authenticated:
-              return redirect('login')
-       form = AddReduceForm()
-       categories = Category.objects.all()
-       items = Item.objects.none()  # Default: empty list
-       selected_category_id = None
-       if request.method == 'POST':
-              form = AddReduceForm(request.POST)
-              selected_category_id = request.POST.get('category')
-              item_id = request.POST.get('item')
-              quantity = request.POST.get('quantity')
-              transaction_type = request.POST.get('transaction_type')
-              if selected_category_id and not transaction_type:
-                     items = Item.objects.filter(category_id=selected_category_id)
-                     return render(request, 'add_reduce_stock.html', {
-                            'categories': categories,
-                            'items': items,
-                            'selected_category_id': selected_category_id
-                     })
-              if form.is_valid():
-              # Handle actual stock transaction
-                     if selected_category_id and item_id and quantity and transaction_type:
-                            item = Item.objects.get(pk=item_id)
-                            quantity = int(quantity)
-                            if item.current_stock > 0:
-                                   if transaction_type == 'add':
-                                          item.current_stock += quantity
-                                          item.save()
-                                          transaction = form.save(commit=False)
-                                          transaction.reference_note = random.randint(1000000000,9999999999) 
-                                          transaction.save()
-                                          messages.success(request, f"{quantity} units added to {item.name}.")      
-                                   elif transaction_type == 'reduce':
-                                          if item.current_stock >= quantity:
-                                                 item.current_stock -= quantity
-                                                 item.save()
-                                                 transaction = form.save(commit=False)
-                                                 transaction.reference_note = random.randint(1000000000,9999999999) 
-                                                 transaction.save()
-                                                 messages.success(request, f"{quantity} units reduced from {item.name}.")
-                                                 print(f"{quantity} units reduced to {item.name} total {item.current_stock}")
-                                          else:
-                                                 messages.error(request, f"Cannot reduce {quantity}. Only {item.current_stock} available.")
-                                                 print("Error in Reducing Stock")
-                                   return redirect('dashboard')
-                            elif item.current_stock <= 0:
-                                   if transaction_type == 'add':
-                                          item.current_stock += quantity
-                                          item.save()
-                                          messages.success(request, f"{quantity} units added to {item.name}.")
-                                          return redirect('dashboard')
-                                   else:
-                                          print("Error")
-                                          messages.error(request,"Error")
-       return render(request, 'add_reduce_stock.html', {'categories': categories,'items': items,'selected_category_id': selected_category_id})
+    return render(request,'add_reduce_stock.html')
+class AddReduceStockAPIView(APIView):
+    def post(self, request):
+        serializer = AddReduceStockCrudSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response({"message": "Transaction successful"}, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+
+# Transaction
 def stock_transaction(request):
-       if not request.user.is_authenticated:
-              return redirect('login')
-       transactions = Stock_Transaction.objects.all()
-       return render(request,'transaction.html',{'transactions':transactions})
+       return render(request, "transaction.html")
 
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 6  # 5 transactions per page
+    page_size_query_param = 'page_size'
+    max_page_size = 100
 
+class TransactionListAPIView(APIView):
+    def get(self, request):
+        transactions = Stock_Transaction.objects.all().order_by('-transaction_date')
+        paginator = StandardResultsSetPagination()
+        result_page = paginator.paginate_queryset(transactions, request)
+        serializer = TransactionListSerializer(result_page, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
+# Download Report
 def download_stock_report(request):
        if not request.user.is_authenticated:
               return redirect('login')
@@ -232,48 +197,9 @@ def download_stock_report(request):
 
        return response
 
-
-def add_reduce_stock_alter(request, category, item_name, type):
-    if not request.user.is_authenticated:
-              return redirect('login')
-    items = get_object_or_404(Item, name=item_name)
-    context = {
-        'c': category,
-        'i': item_name,
-        't': type,
-        'items': items,
-    }
-    return render(request, 'add_reduce_alter.html', context)
-
-# Handles AJAX POST request from the form
-@api_view(['POST'])
-def add_reduce_list(request):
-    serializer = AddReduceSerializer(data=request.data)
-    if serializer.is_valid():
-        item = serializer.validated_data['item']
-        quantity = serializer.validated_data['quantity']
-        tx_type = request.data.get('type')
-
-        if tx_type not in ['add', 'reduce']:
-            return Response({'error': 'Invalid transaction type'}, status=400)
-
-        if tx_type == 'add':
-            item.current_stock += quantity
-        elif tx_type == 'reduce':
-            if item.current_stock >= quantity:
-                item.current_stock -= quantity
-            else:
-                return Response({'error': f'Cannot reduce {quantity}. Only {item.current_stock} available.'}, status=400)
-
-        item.save()
-
-        transaction = serializer.save(reference_note=random.randint(1000000000, 9999999999))
-        return Response({'message': f"{quantity} units {'added to' if tx_type == 'add' else 'reduced from'} {item.name}", "item": item.id})
-
-    return Response(serializer.errors, status=400)
-
+# Logout
 def logout(request):
        response = redirect('login')
-       response.delete_cookie('jwt')
+       response.localStorage.removeItem('access')
        return response
 

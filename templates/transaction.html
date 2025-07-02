@@ -1,63 +1,95 @@
-{% extends 'base.html'%}
+{% extends 'base.html' %}
 {% block content %}
-{% if transactions %}
-  <div class="card mt-5 shadow-sm">
-    <div class="card-header bg-primary text-white">
-      <h5 class="mb-0">Transaction Histroy</h5>
-    </div>
-    <div class="card-body">
-      <table class="table" style = "text-align:center">
-        <thead>
-          <tr>
-            <th>Item Name</th>
-            <th>Quantity</th>
-            <th>Transaction Type</th>
-            <th>Date</th>
-            <th>Time</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for transaction in transactions %}
-          <tr>
-            <td>{{ transaction.item }}</td>
-            <td>{{ transaction.quantity }}</td>
-            <td>
-            <span class="{% if transaction.transaction_type == 'add' %}
-                add
-            {% else %}
-                reduce
-            {% endif %}">
-            {{transaction.transaction_type}}
-            </span></td>
-            <td>{{transaction.transaction_date|date:"d/M/Y"}}</td>
-            <td>{{transaction.transaction_date|time:"H:i:s"}}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-      <a href="{% url 'download_stock_report' %}" class="btn btn-primary">Download Stock Report</a>
 
-    </div>
-  </div>
-  {% else %}
-  <h1> No Transactions Done Yet</h1>
-  {% endif %}
 
-  <script>
-  const accessToken = localStorage.getItem('access');
 
-  $.ajax({
-    url: '/api/protected/',  // your protected API
-    method: 'GET',
-    headers: {
-      'Authorization': 'Bearer ' + accessToken
-    },
-    success: function (data) {
-      console.log('Protected data:', data);
-    },
-    error: function () {
-      console.log('Unauthorized or token expired');
+<div class="card mt-5 shadow-sm" id="transactions">
+  <!-- AJAX will inject transaction table here -->
+</div>
+<script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
+<script>
+  function loadTransactions(pageUrl = '/api/transaction/') {
+    const accessToken = localStorage.getItem('access');
+    if (!accessToken) {
+      alert("You are not logged in. Please login.");
+      window.location.href = "/";
+      return;
     }
-  });
+
+    $.ajax({
+      url: pageUrl,
+      method: 'GET',
+      headers: {
+        'Authorization': 'Bearer ' + accessToken
+      },
+      success: function (data) {
+        const container = $('#transactions');
+
+        if (data.results.length === 0) {
+          container.html('<h4 class="text-center text-muted">No Transactions Done Yet</h4>');
+          return;
+        }
+
+        let html = `
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Transaction History</h5>
+          </div>
+          <div class="card-body">
+            <table class="table text-center">
+              <thead>
+                <tr>
+                  <th>Item Name</th>
+                  <th>Quantity</th>
+                  <th>Transaction Type</th>
+                  <th>Date</th>
+                  <th>Time</th>
+                </tr>
+              </thead>
+              <tbody>`;
+
+        data.results.forEach(function (transaction) {
+          const type = transaction.transaction_type === 'add' ? 'bg-success' : 'bg-danger';
+          const dateTime = dayjs(transaction.transaction_date);
+          const date = dateTime.format('DD/MM/YYYY');
+          const time = dateTime.format('HH:mm:ss');
+
+          html += `
+            <tr>
+              <td>${transaction.item}</td>
+              <td>${transaction.quantity}</td>
+              <td><span class="badge ${type} text-white px-3 py-2 rounded-pill text-uppercase">${transaction.transaction_type}</span></td>
+              <td>${date}</td>
+              <td>${time}</td>
+            </tr>`;
+        });
+
+        html += `</tbody></table>`;
+
+        html += `<div class="d-flex justify-content-between mt-3">`;
+        if (data.previous) {
+          html += `<button class="btn btn-secondary" onclick="loadTransactions('${data.previous}')">Previous</button>`;
+        }
+        if (data.next) {
+          html += `<button class="btn btn-secondary ms-auto" onclick="loadTransactions('${data.next}')">Next</button>`;
+        }
+        html += `</div>
+        <div class="text-center">
+        <a href="/download-stock-report/" class="btn btn-primary">Download Stock Report</a>
+        </div>
+        </div>`;
+
+        container.html(html);
+      },
+      error: function () {
+        $('#transactions').html('<p class="text-danger text-center">Failed to load transactions.</p>');
+      }
+    });
+  }
+
+  $(document).ready(function () {
+    loadTransactions();
+  });
 </script>
+
+
 {% endblock %}
