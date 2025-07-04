@@ -12,6 +12,7 @@ from django.db.models import Sum, Count, Avg, Max, Min
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
 from django.contrib.auth import logout as auth_logout
+from rest_framework.permissions import IsAuthenticated
 
 
 # Create your views here.
@@ -36,6 +37,7 @@ def login(request):
 def dashboard(request):
     return render(request, 'dashboard.html')
 class CategoryListAPIView(APIView): 
+    permission_classes = [IsAuthenticated]
     def get(self, request): 
         categories = Category.objects.annotate(item_count=Count('item')).order_by('id')
         serializer = CategoryListSerializer(categories, many=True)
