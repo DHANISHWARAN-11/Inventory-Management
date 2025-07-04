@@ -11,6 +11,9 @@ import csv
 from django.db.models import Sum, Count, Avg, Max, Min
 from rest_framework import status
 from rest_framework.pagination import PageNumberPagination
+from django.contrib.auth import logout as auth_logout
+
+
 # Create your views here.
 
 def register(request):
@@ -32,8 +35,8 @@ def login(request):
 # Dashboard Rendering
 def dashboard(request):
     return render(request, 'dashboard.html')
-class CategoryListAPIView(APIView):
-    def get(self, request):
+class CategoryListAPIView(APIView): 
+    def get(self, request): 
         categories = Category.objects.annotate(item_count=Count('item')).order_by('id')
         serializer = CategoryListSerializer(categories, many=True)
         return Response(serializer.data)
@@ -67,13 +70,9 @@ class AddItemCrudAPIView(APIView):
             return Response({'status': 1, 'message': 'Item added successfully', 'data': serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-def add_reduce_stock_another(request, category=None, item_name=None, type=None):
-    """
-    Renders the Add/Reduce Stock form with or without pre-filled values.
-    """
-
+# Dashboard Add_Reduce
+def add_reduce_stock_alter(request, category=None, item_name=None, type=None):
     context = {}
-
     if category and item_name and type:
         try:
             # Get item based on category and name
@@ -98,7 +97,7 @@ class DashboardAddReduceCrudAPIView(APIView):
 # Add Reduce Stock
 def add_reduce_stock(request):
     return render(request,'add_reduce_stock.html')
-class AddReduceStockAPIView(APIView):
+class AddReduceStockCrudAPIView(APIView):
     def post(self, request):
         serializer = AddReduceStockCrudSerializer(data=request.data)
         if serializer.is_valid():
@@ -113,11 +112,11 @@ def stock_transaction(request):
        return render(request, "transaction.html")
 
 class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 6  # 5 transactions per page
+    page_size = 6  # 6 transactions per page
     page_size_query_param = 'page_size'
     max_page_size = 100
 
-class TransactionListAPIView(APIView):
+class TransactionListAPIView(APIView): 
     def get(self, request):
         transactions = Stock_Transaction.objects.all().order_by('-transaction_date')
         paginator = StandardResultsSetPagination()
@@ -199,7 +198,5 @@ def download_stock_report(request):
 
 # Logout
 def logout(request):
-       response = redirect('login')
-       response.localStorage.removeItem('access')
-       return response
-
+    auth_logout(request)
+    return redirect('login')

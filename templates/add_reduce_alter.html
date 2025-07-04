@@ -2,10 +2,10 @@
 {% load static %}
 {% block content %}
 
-<h2 style="text-align:center; margin-bottom: 20px;">Add / Reduce Stock</h2>
-
+<div class = "container mt-5" style="max-width: 600px;">
+<div id="success-message" class="alert alert-success text-center" style="display: none;"></div>
 <form id="stockForm">
-  {% csrf_token %}
+  <h2 style="text-align:center; margin-bottom: 20px;">Add / Reduce Stock</h2>
   {% include 'includes/error.html' %}
 
   <!-- Category (Display only) -->
@@ -34,11 +34,12 @@
   <!-- Quantity -->
   <label for="quantity">Quantity</label>
   <input type="number" id="quantity" name="quantity"class="form-control mb-4">
+  <div class="text-danger" id="quantity-error"></div>
 
   <!-- Submit Button -->
   <button type="submit" class="btn btn-primary w-100">Submit</button>
 </form>
-
+</div>
 <!-- AJAX Script -->
 <script>
   $('#stockForm').on('submit', function (e) {
@@ -50,16 +51,15 @@
     const csrfToken = $('input[name=csrfmiddlewaretoken]').val();
     const accessToken = localStorage.getItem('access');
 
+     $('#quantity-error').text('');
+    $('#success-message').hide();
+
     if (!accessToken) {
       alert("You are not logged in. Please login.");
       window.location.href = "/";
       return;
     }
 
-    if (!itemId || !transactionType || !quantity) {
-      alert("All fields are required.");
-      return;
-    }
 
     $.ajax({
       url: '/api/dashboard_add_reduce_alter/crud/',
@@ -75,18 +75,22 @@
         'X-CSRFToken': csrfToken
       },
       success: function (response) {
-        alert('Stock updated successfully!');
-        window.location.href = '/dashboard/';
+         $('#success-message').text(' Stock Updated successfully!').fadeIn();
+          setTimeout(function () {
+         $('#success-message').fadeOut();
+           window.location.href = '/dashboard/';
+         }, 3000);
       },
       error: function (xhr) {
         if (xhr.status === 401 || xhr.status === 403) {
           alert("Session expired. Please login again.");
           localStorage.clear();
           window.location.href = "/";
-        } else {
-          let errorMsg = xhr.responseJSON?.detail || "Something went wrong.";
-          alert("Error: " + errorMsg);
-        }
+        } 
+        const errors = xhr.responseJSON || {};
+      if (errors.quantity) {
+        $('#quantity-error').text(errors.quantity[0]);
+      }
       }
     });
   });

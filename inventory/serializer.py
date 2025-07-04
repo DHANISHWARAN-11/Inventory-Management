@@ -12,6 +12,10 @@ class CategoryCrudSerializer(serializers.ModelSerializer):    #add Category
     class Meta:
         model = Category
         fields = ['id', 'name', 'description']
+    def validate_name(self,value):
+        if Category.objects.filter(name__iexact=value).exists():
+            raise serializers.ValidationError("This category already exists.")
+        return value
 
 class ItemListSerializer(serializers.ModelSerializer):  # Dashboard Item List
     class Meta:
@@ -27,16 +31,19 @@ class DashboardAddReduceCrudSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         item = data['item']
-        transaction_type = self.initial_data.get('transaction_type')  # get from raw data
+        transaction_type = self.initial_data.get('transaction_type')
         quantity = data['quantity']
 
+        if item.current_stock < 0:
+            item.current_stock = 0
+            item.save()
+
         if quantity <= 0:
-            raise serializers.ValidationError("Quantity must be positive.")
+            raise serializers.ValidationError({'quantity': "Quantity must be positive."})
 
         if transaction_type == 'reduce' and item.current_stock < quantity:
-            raise serializers.ValidationError("Not enough stock to reduce.")
+            raise serializers.ValidationError({'quantity': "Not enough stock to reduce."})
 
-        # Pass transaction_type forward
         data['transaction_type'] = transaction_type
         return data
 
@@ -56,16 +63,21 @@ class DashboardAddReduceCrudSerializer(serializers.ModelSerializer):
         transaction = Stock_Transaction.objects.create(
             item=item,
             transaction_type=transaction_type,
-            quantity=quantity
+            quantity=quantity,
+            reference_note=str(self.generate_reference_note())
         )
         return transaction
+    def generate_reference_note(self):
+        import random
+        return random.randint(1000000000, 9999999999)
+        
 
 
 class AddItemCrudSerializer(serializers.ModelSerializer): # Add Item
     class Meta:
         model = Item
         fields = ['id','name','category','current_stock','unit','description']
-        read_only_fields = ['sku']  # we generate it, not input from user
+        read_only_fields = ['sku']  
 
     def create(self, validated_data):
         name = validated_data['name']
@@ -81,26 +93,34 @@ class AddItemCrudSerializer(serializers.ModelSerializer): # Add Item
         item = Item.objects.create(sku=sku, **validated_data)
         return item
 
+    def validate(self, data):
+        if data['current_stock'] < 0:
+            data['current_stock'] = 0  
+        return data
+
 
 class AddReduceStockCrudSerializer(serializers.ModelSerializer):   # Add Reduce Stock
     class Meta:
         model = Stock_Transaction
         fields = ['item', 'transaction_type', 'quantity']
+        
 
     def validate(self, data):
-        item = data.get('item')
-        transaction_type = data.get('transaction_type')
-        quantity = data.get('quantity')
+        item = data['item']
+        transaction_type = data['transaction_type']
+        quantity = data['quantity']
 
-        if item is None or transaction_type is None or quantity is None:
-            raise serializers.ValidationError("Item, transaction type and quantity are required.")
+        if item.current_stock < 0:
+            item.current_stock = 0
+            item.save()
 
         if quantity <= 0:
-            raise serializers.ValidationError("Quantity must be positive.")
+            raise serializers.ValidationError({'quantity': "Quantity must be positive."})
 
         if transaction_type == 'reduce' and item.current_stock < quantity:
-            raise serializers.ValidationError(f"Not enough stock to reduce in {item.current_stock}")
+            raise serializers.ValidationError({'quantity': "Not enough stock to reduce."})
 
+        data['transaction_type'] = transaction_type
         return data
 
     def create(self, validated_data):
@@ -123,15 +143,16 @@ class AddReduceStockCrudSerializer(serializers.ModelSerializer):   # Add Reduce 
             quantity=quantity,
             reference_note=str(self.generate_reference_note())
         )
-        print("✅ Transaction saved:", transaction)
         return transaction
     def generate_reference_note(self):
         import random
         return random.randint(1000000000, 9999999999)
+    
+    
    
 
 class TransactionListSerializer(serializers.ModelSerializer):  # Transaction List
-    item = serializers.CharField(source='item.name')  # ✅ shows item name, not ID
+    item = serializers.CharField(source='item.name')  # shows item name
 
     class Meta:
         model = Stock_Transaction

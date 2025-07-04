@@ -1,76 +1,91 @@
 {% extends 'base.html' %}
 {% load static %}
-
 {% block content %}
-<h1 style="text-align:center">Add Category</h1>
 
-<form id="add-category-form">
-    
-    <div class="mb-3">
-        <label for="category">Category</label>
-        <input type="text" id="category" name="name" class="form-control" >
-        <div class="text-danger" id="name-error"></div>
+<div class="container mt-5" style="max-width: 600px;">
+  <div id="success-message" class="alert alert-success text-center" style="display: none;"></div>
+  {% include 'includes/error.html' %}
+      <form id="add-category-form">
+         <h2 class="text-center mb-4">Add Category</h2>
+        {% csrf_token %}
 
-        <label for="description" class="mt-3">Description</label>
-        <input type="text" id="description" name="description" class="form-control">
-        <div class="text-danger" id="description-error"></div>
+        <!-- Category Name -->
+        <div class="mb-3">
+          <label for="category" class="form-label fw-semibold">Category Name</label>
+          <input type="text" id="category" name="name" class="form-control" placeholder="Enter category name">
+          <div class="text-danger small mt-1" id="name-error"></div>
+        </div>
+
+        <!-- Description -->
+        <div class="mb-4">
+          <label for="description" class="form-label fw-semibold">Description</label>
+          <input type="text" id="description" name="description" class="form-control" placeholder="Optional">
+          <div class="text-danger small mt-1" id="description-error"></div>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary w-100 py-2">Submit</button>
+      </form>
     </div>
-
-    <button type="submit" class="btn btn-primary mt-3">Submit</button>
-</form>
-
+  </div>
+</div>
 
 <script>
   $('#add-category-form').submit(function (e) {
-  e.preventDefault();
+    e.preventDefault();
 
-  const name = $('#category').val();
-  const description = $('#description').val();
-  const accessToken = localStorage.getItem('access');
-  const csrfToken = $('input[name=csrfmiddlewaretoken]').val();
+    // Clear any previous errors
+    $('#name-error, #description-error').text('');
+    $('#success-message').hide();
 
+    const name = $('#category').val();
+    const description = $('#description').val();
+    const accessToken = localStorage.getItem('access');
+    const csrfToken = $('input[name=csrfmiddlewaretoken]').val();
 
-  // ✅ If not logged in
-  if (!accessToken) {
-    alert("You are not logged in. Please login.");
-    window.location.href = "/";
-    return;
-  }
-
-  $.ajax({
-    url: '/api/categories/crud',
-    method: 'POST',
-    contentType: 'application/json',  // IMPORTANT: set JSON type
-    data: JSON.stringify({ 
-      name: name,
-      description: description ? description : null
-    }),
-    headers: {
-      'Authorization': 'Bearer ' + accessToken,
-      'X-CSRFToken': csrfToken
-    },
-    success: function (response) {
-      alert('Category added successfully!');
-      window.location.href = '/dashboard/';
-    },
-    error: function (xhr) {
-      if (xhr.status === 401 || xhr.status === 403) {
-        alert("Session expired. Please login again.");
-        localStorage.removeItem("access");
-        localStorage.removeItem("refresh");
-        window.location.href = "/";
-        return;
-      }
-
-      const errors = xhr.responseJSON || {};
-      if (errors.name) {
-        $('#name-error').text(errors.name[0]);
-      }
-      if (errors.description) {
-        $('#description-error').text(errors.description[0]);
-      }
+    if (!accessToken) {
+      alert("You are not logged in. Please login.");
+      window.location.href = "/";
+      return;
     }
+
+    $.ajax({
+      url: '/api/categories/crud',
+      method: 'POST',
+      contentType: 'application/json',
+      data: JSON.stringify({
+        name: name,
+        description: description ? description : null
+      }),
+      headers: {
+        'Authorization': 'Bearer ' + accessToken,
+        'X-CSRFToken': csrfToken
+      },
+      success: function (response) {
+        $('#success-message').text(' Category added successfully!').fadeIn();
+        setTimeout(() => {
+          $('#success-message').fadeOut();
+          window.location.href = '/dashboard/';
+        }, 3000);
+      },
+      error: function (xhr) {
+        if (xhr.status === 401 || xhr.status === 403) {
+          alert("Session expired. Please login again.");
+          localStorage.removeItem("access");
+          localStorage.removeItem("refresh");
+          window.location.href = "/";
+          return;
+        }
+
+        const errors = xhr.responseJSON || {};
+        // ✅ Show duplicate error
+        if (errors.name && errors.name[0].toLowerCase().includes('already exists')) {
+          $('#name-error').text(' This category already exists.');
+        } else if (errors.name) {
+          $('#name-error').text(errors.name[0]);
+        }
+      }
+    });
   });
-});
 </script>
 {% endblock %}

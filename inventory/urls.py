@@ -2,6 +2,7 @@ from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenObtainPairView
 
+
 urlpatterns = [
     # Login Template
     path('',views.login,name='login'),
@@ -30,14 +31,15 @@ urlpatterns = [
     path('api/add_items/', views.AddItemCrudAPIView.as_view(), name='api-add-item'),
       
 
-    #dashboard_add_reduce
-    path('add_reduce_stock/<str:category>/<str:item_name>/<str:type>/', views.add_reduce_stock_another, name='add_reduce_stock_alter'),
+    #dashboard_add_reduce Template
+    path('add_reduce_stock/<str:category>/<str:item_name>/<str:type>/', views.add_reduce_stock_alter, name='add_reduce_stock_alter'),
+    #dashboard_add_reduce api
     path('api/dashboard_add_reduce_alter/crud/',views.DashboardAddReduceCrudAPIView.as_view(),name='dashboard-add-reduce'),
     
     #add_reduce_stock template
     path('add_reduce_stock/',views.add_reduce_stock,name='add_reduce_stock'),
     #add_reduce_stock api
-    path('api/add_reduce_stock/', views.AddReduceStockAPIView.as_view(), name='api/add_reduce_stock'),
+    path('api/add_reduce_stock/', views.AddReduceStockCrudAPIView.as_view(), name='api_add_reduce_stock'),
     
 
     # Report Download

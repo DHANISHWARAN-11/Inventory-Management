@@ -23,6 +23,7 @@
     alert("You are not logged in. Please login.");
     window.location.href = "/";
   }
+  
 
   // Load categories on page load
   $(document).ready(function () {
@@ -31,6 +32,7 @@
       method: 'GET',
       headers: {
         'Authorization': 'Bearer ' + accessToken
+        
       },
       success: function (data) {
         const container = $('#category-container');

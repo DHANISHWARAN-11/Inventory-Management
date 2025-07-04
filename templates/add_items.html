@@ -2,41 +2,62 @@
 {% load static %}
 {% block content %}
 
+<div class="container mt-5" style="max-width: 600px;">
+<div id="success-message" class="alert alert-success text-center" style="display: none;"></div>
 
-<form method="POST" id="add-item-form">
-  <h1 style="text-align:center">Add Items</h1>
-  {% csrf_token %}
-  {% include 'includes/error.html' %}
+      <form method="POST" id="add-item-form">
+        {% csrf_token %}
+        {% include 'includes/error.html' %}
+        <h2 class="text-center mb-4">Add Item</h2>
+        <!-- Category -->
+        <div class="mb-3">
+          <label for="category" class="form-label fw-semibold">Category</label>
+          <select class="form-control" id="category" name="category">
+            <option value="">Select</option>
+          </select>
+          <div class="text-danger small mt-1" id="category-error"></div>
+        </div>
 
-  <div class="mb-3">
-    <label for="category">Category</label>
-    <select class="form-control" id="category" name="category">
-      <option value="">Select</option>
-    </select>
+        <!-- Item Name -->
+        <div class="mb-3">
+          <label for="name" class="form-label fw-semibold">Item Name</label>
+          <input type="text" class="form-control" id="name" name="name" placeholder="Enter item name">
+          <div class="text-danger small mt-1" id="name-error"></div>
+        </div>
 
-    <label for="name">Item Name</label>
-    <input type="text" id="name" name="name"><br>
+        <!-- Description -->
+        <div class="mb-3">
+          <label for="description" class="form-label fw-semibold">Description</label>
+          <input type="text" class="form-control" id="description" name="description" placeholder="Optional">
+        </div>
 
-    <label for="description">Description</label>
-    <input type="text" id="description" name="description"><br>
+        <!-- Unit -->
+        <div class="mb-3">
+          <label for="unit" class="form-label fw-semibold">Unit</label>
+          <input type="text" class="form-control" id="unit" name="unit" placeholder="e.g. pieces, kg">
+          <div class="text-danger small mt-1" id="unit-error"></div>
+        </div>
 
-    <label for="unit">Unit</label>
-    <input type="text" id="unit" name="unit"><br>
+        <!-- Current Stock -->
+        <div class="mb-4">
+          <label for="current_stock" class="form-label fw-semibold">Current Stock</label>
+          <input type="number" class="form-control" id="current_stock" name="current_stock"  placeholder="Enter stock count">
+        </div>
 
-    <label for="current_stock">Current Stock</label>
-    <input type="number" id="current_stock" name="current_stock" min="0"><br>
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary w-100 py-2">Submit</button>
+      </form>
+    </div>
   </div>
-
-  <button type="submit" class="btn btn-primary mt-3">Submit</button>
-</form>
+</div>
 
 <script>
-  let itemNamesInCategory = []; // ✅ Global array to hold item names
+  let itemNamesInCategory = [];
 
   $(document).ready(function () {
     const accessToken = localStorage.getItem("access");
 
-    // ✅ Load categories on page load
+    // Load categories
     $.ajax({
       url: '/api/categories/',
       method: 'GET',
@@ -54,7 +75,7 @@
       }
     });
 
-    // ✅ Fetch item names when category changes
+    // Fetch item names on category change
     $('#category').change(function () {
       const selectedCategoryId = $(this).val();
       itemNamesInCategory = [];
@@ -77,37 +98,33 @@
     });
   });
 
-  // ✅ Form submission with duplicate name check
   $('#add-item-form').submit(function (e) {
     e.preventDefault();
 
     const category = $('#category').val();
-    const name = $('#name').val().toLowerCase(); // lowercase check
+    const name = $('#name').val().toLowerCase();
     const description = $('#description').val();
     const unit = $('#unit').val();
     const current_stock = $('#current_stock').val();
     const accessToken = localStorage.getItem('access');
     const csrfToken = $('input[name=csrfmiddlewaretoken]').val();
 
-    // ✅ Validations
+    $('#name-error, #category-error, #unit-error').text('');
+    $('#success-message').hide();
+
     if (!accessToken) {
       alert("You are not logged in. Please login.");
       window.location.href = "/";
       return;
     }
 
-    if (!category || !name || !unit) {
-      alert("Please fill all required fields");
-      return;
-    }
-
-    // ✅ Check for duplicate item name
+    $('#name-error').text('');
     if (itemNamesInCategory.includes(name)) {
-      alert(`Item "${name}" already exists in this category.`);
-      return;
+      $('#name-error').text(`Item "${name}" already exists in this category.`);
+    return;
     }
 
-    // ✅ Submit via AJAX
+
     $.ajax({
       url: '/api/add_items/',
       method: 'POST',
@@ -124,16 +141,27 @@
         'X-CSRFToken': csrfToken
       },
       success: function (response) {
-        alert(name + ' added successfully!');
-        window.location.href = '/dashboard/';
+        $('#success-message').text(`${name} added successfully!`).fadeIn();
+        setTimeout(() => {
+          $('#success-message').fadeOut();
+          window.location.href = '/dashboard/';
+        }, 3000);
       },
       error: function (xhr) {
         if (xhr.status === 401 || xhr.status === 403) {
           alert("Session expired. Please login again.");
           localStorage.clear();
-          window.location.href = "/";
-        } else {
-          alert("Error: " + JSON.stringify(xhr.responseJSON));
+          window.location.href = "/";       }
+
+        const errors = xhr.responseJSON || {};
+        if (errors.name) {
+          $('#name-error').text(errors.name[0]);
+        }
+        if (errors.category) {
+          $('#category-error').text(errors.category[0]);
+        }
+        if (errors.unit) {
+          $('#unit-error').text(errors.unit[0]);
         }
       }
     });

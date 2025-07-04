@@ -2,41 +2,56 @@
 {% load static %}
 {% block content %}
 
-<form id="transaction-form">
-  <h2 style="text-align:center">Add/Reduce Transaction</h2>
-  <div class="mb-3">
-    <label for="category">Category</label>
-    <select name="category" id="category" class="form-control">
-      <option value="">Select</option>
-      <!-- Loaded via JS -->
-    </select>
-  </div>
+<div class="container mt-5" style="max-width: 600px;">
+<div id="success-message" class="alert alert-success text-center" style="display: none;"></div>
 
-  <div class="mb-3">
-    <label for="item">Item</label>
-    <select class="form-control" id="item" name="item">
-      <option value="">Select</option>
-      <!-- Loaded via JS -->
-    </select>
-  </div>
+      <form id="transaction-form">
+        <h2 class="text-center mb-4">Add / Reduce Stock</h2>
+        {% include 'includes/error.html' %}
 
-  <div class="mb-3">
-    <label for="transaction_type">Transaction Type</label>
-    <select class="form-control" id="transaction_type" name="transaction_type">
-      <option value="">Select</option>
-      <option value="add">Add</option>
-      <option value="reduce">Reduce</option>
-    </select>
-  </div>
+        <!-- Category -->
+        <div class="mb-3">
+          <label for="category" class="form-label fw-semibold">Category</label>
+          <select name="category" id="category" class="form-control">
+            <option value="">Select</option>
+          </select>
+          <div class="text-danger small mt-1" id="category-error"></div>
+        </div>
 
-  <div class="mb-3">
-    <label for="quantity">Quantity</label>
-    <input type="number" class="form-control" id="quantity" name="quantity" min="1">
-  </div>
+        <!-- Item -->
+        <div class="mb-3">
+          <label for="item" class="form-label fw-semibold">Item</label>
+          <select class="form-control" id="item" name="item">
+            <option value="">Select</option>
+          </select>
+          <div class="text-danger small mt-1" id="item-error"></div>
+        </div>
 
-  <button type="submit" class="btn btn-primary mt-3">Submit</button>
-</form>
+        <!-- Transaction Type -->
+        <div class="mb-3">
+          <label for="transaction_type" class="form-label fw-semibold">Transaction Type</label>
+          <select class="form-control" id="transaction_type" name="transaction_type">
+            <option value="">Select</option>
+            <option value="add">Add</option>
+            <option value="reduce">Reduce</option>
+          </select>
+          <div class="text-danger small mt-1" id="transaction_type-error"></div>
+        </div>
 
+        <!-- Quantity -->
+        <div class="mb-4">
+          <label for="quantity" class="form-label fw-semibold">Quantity</label>
+          <input type="number" class="form-control" id="quantity" name="quantity" placeholder="Enter quantity">
+          <div class="text-danger small mt-1" id="quantity-error"></div>
+        </div>
+
+        <!-- Submit Button -->
+        <button type="submit" class="btn btn-primary w-100 py-2">Submit</button>
+      </form>
+    </div>
+
+
+<!-- Script -->
 <script>
   let lastTransaction = {};
 
@@ -49,7 +64,7 @@
       return;
     }
 
-    // ✅ Load Categories
+    // Load Categories
     $.ajax({
       url: "/api/categories/",
       method: "GET",
@@ -61,7 +76,7 @@
       }
     });
 
-    // ✅ Load Items on category change
+    // Load Items when category changes
     $('#category').change(function () {
       const categoryId = $(this).val();
       $('#item').empty().append('<option value="">Select</option>');
@@ -71,9 +86,7 @@
       $.ajax({
         url: `/api/items/?category_id=${categoryId}`,
         method: "GET",
-        headers: { 
-          Authorization: "Bearer " + accessToken 
-        },
+        headers: { Authorization: "Bearer " + accessToken },
         success: function (items) {
           items.forEach(item => {
             $('#item').append(`<option value="${item.id}">${item.name}</option>`);
@@ -81,21 +94,19 @@
         }
       });
     });
-  
-    // ✅ Submit Transaction via API
+
+    // Submit Form
     $('#transaction-form').submit(function (e) {
       e.preventDefault();
+
+      // Clear old errors
+      $('#item-error, #transaction_type-error, #quantity-error').text('');
+      $('#success-message').hide();
 
       const item = $('#item').val();
       const transaction_type = $('#transaction_type').val();
       const quantity = parseInt($('#quantity').val());
 
-      if (!item || !transaction_type || !quantity) {
-        alert("All fields are required.");
-        return;
-      }
-  
-      // ✅ Frontend duplicate prevention
       if (
         lastTransaction.item === item &&
         lastTransaction.type === transaction_type &&
@@ -104,7 +115,6 @@
         alert("You already submitted this transaction. Change values to proceed.");
         return;
       }
-  
 
       $.ajax({
         url: "/api/add_reduce_stock/",
@@ -117,20 +127,30 @@
         }),
         headers: {
           Authorization: "Bearer " + accessToken,
-          
         },
         success: function (result) {
-          alert(result.message);
+          $('#success-message').text(result.message || '✅ Transaction completed!').fadeIn();
+          setTimeout(() => {
+            $('#success-message').fadeOut();
+          }, 3000);
           lastTransaction = { item, type: transaction_type, quantity };
-          $('#transaction-form')[0].reset();  // clear form
+          $('#transaction-form')[0].reset();
         },
         error: function (xhr) {
           if (xhr.status === 401 || xhr.status === 403) {
             alert("Session expired. Please login again.");
             localStorage.clear();
             window.location.href = "/";
-          } else {
-            alert("Error: " + JSON.stringify(xhr.responseJSON));
+          }
+          const errors = xhr.responseJSON || {};
+          if (errors.item) {
+            $('#item-error').text(errors.item[0]);
+          }
+          if (errors.transaction_type) {
+            $('#transaction_type-error').text(errors.transaction_type[0]);
+          }
+          if (errors.quantity) {
+            $('#quantity-error').text(errors.quantity[0]);
           }
         }
       });
