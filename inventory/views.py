@@ -39,13 +39,16 @@ def dashboard(request):
 class CategoryListAPIView(APIView): 
     permission_classes = [IsAuthenticated]
     def get(self, request): 
-        categories = Category.objects.annotate(item_count=Count('item')).order_by('id')
+        if request.user.is_superuser:
+            categories = Category.objects.all().annotate(item_count=Count('item')).order_by('id')
+        else:
+            categories = Category.objects.filter(user=request.user).annotate(item_count=Count('item')).order_by('id')    
         serializer = CategoryListSerializer(categories, many=True)
         return Response(serializer.data)
 class ItemListAPIView(APIView):
     def get(self, request):
        category_id = request.GET.get("category_id")
-       items = Item.objects.filter(category_id=category_id)
+       items = Item.objects.filter(user=request.user, category_id=category_id)
        serializer = ItemListSerializer(items, many=True)
        return Response(serializer.data)
 
@@ -56,7 +59,7 @@ class CategoryCrudAPIView(APIView):
     def post(self, request):
         serializer = CategoryCrudSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(created_by=request.user,user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
   
@@ -68,7 +71,7 @@ class AddItemCrudAPIView(APIView):
     def post(self, request):
         serializer = AddItemCrudSerializer(data=request.data)
         if serializer.is_valid():
-            serializer.save()
+            serializer.save(user=request.user)
             return Response({'status': 1, 'message': 'Item added successfully', 'data': serializer.data}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -77,16 +80,26 @@ def add_reduce_stock_alter(request, category=None, item_name=None, type=None):
     context = {}
     if category and item_name and type:
         try:
-            # Get item based on category and name
-            item = get_object_or_404(Item, name=item_name, category__name=category)
-            context['c'] = category
-            context['i'] = item_name
-            context['t'] = type
-            context['items'] = item  # in case you want to use item.id
-        except Item.DoesNotExist:
-            context['error'] = "Item not found."
+            item = Item.objects.filter(
+                name=item_name,
+                category__name=category,
+                user=request.user  # restrict to current user
+            ).first()
+
+            if item:
+                context['c'] = category
+                context['i'] = item_name
+                context['t'] = type
+                context['items'] = item
+            else:
+                context['error'] = "Item not found."
+        except Exception as e:
+            context['error'] = f"Unexpected error: {str(e)}"
+    else:
+        context['error'] = "Invalid URL parameters."
 
     return render(request, 'add_reduce_alter.html', context)
+
 
 class DashboardAddReduceCrudAPIView(APIView):
     def post(self, request):
@@ -106,8 +119,6 @@ class AddReduceStockCrudAPIView(APIView):
             serializer.save()
             return Response({"message": "Transaction successful"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
 
 # Transaction
 def stock_transaction(request):
@@ -202,3 +213,59 @@ def download_stock_report(request):
 def logout(request):
     auth_logout(request)
     return redirect('login')
+
+
+# CSV Export for Items
+class ExportItemsCSVAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        category_id = request.GET.get('category_id')  # optional filter
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="items.csv"'
+
+        writer = csv.writer(response)
+        writer.writerow(['Category', 'Item Name', 'Current Stock'])
+
+        # Query and sort
+        items = Item.objects.select_related('category').filter(user=request.user)
+        if category_id:
+            items = items.filter(category_id=category_id)
+        items = items.order_by('category__name', 'name')
+
+        for item in items:
+            writer.writerow([item.category.name, item.name, item.current_stock])
+
+        return response
+
+class CategoryItemCSVImportAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        rows = request.data.get("rows", [])
+        user = request.user
+
+        if not rows:
+            return Response({"success": False, "message": "Empty or invalid CSV data."}, status=400)
+
+        for row in rows:
+            cat_name = row.get("category", "").strip() or "Unnamed Category"
+            item_name = row.get("name", "").strip() or "Unnamed Item"
+            stock = int(row.get("current_stock", 0))
+
+            # Get or create category for the user
+            category, _ = Category.objects.get_or_create(name=cat_name, user=user)
+
+            # Create item if not exists
+            if not Item.objects.filter(name=item_name, category=category, user=user).exists():
+                Item.objects.create(
+                    name=item_name,
+                    current_stock=stock,
+                    category=category,
+                    user=user,
+                    sku="SKU0000",  # You can change this to auto-generate
+                    unit="pcs"       # Or make dynamic if available in CSV
+                )
+
+        return Response({"success": True, "message": "Data imported successfully."})
+

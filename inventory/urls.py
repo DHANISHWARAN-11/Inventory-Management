@@ -52,5 +52,9 @@ urlpatterns = [
     path('stock_transaction/',views.stock_transaction, name='stock_transaction'),
     #transaction List API
     path('api/transaction/',views.TransactionListAPIView.as_view(),name='api-transaction'),
-    
+
+    #dashboard csv
+    path('api/export/items/', views.ExportItemsCSVAPIView.as_view(), name='export_items_csv_api'),
+    path('api/import/categories-items/', views.CategoryItemCSVImportAPIView.as_view(), name='import_csv'),
+
 ]
