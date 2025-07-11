@@ -18,7 +18,7 @@ class Item(models.Model):
     user = models.ForeignKey(User,on_delete=models.CASCADE)
     sku = models.CharField(max_length=8)
     description = models.CharField(max_length=200,null=True,blank=True)  
-    unit = models.CharField(max_length=50)
+    unit = models.CharField(max_length=50,blank=True, null=True)
     current_stock = models.IntegerField(default=0)  # allow blank/null, default 0
     created_at = models.DateTimeField(auto_now_add=True)
     

@@ -78,7 +78,7 @@
         }
 
         const errors = xhr.responseJSON || {};
-        // ✅ Show duplicate error
+        //  Show duplicate error
         if (errors.name && errors.name[0].toLowerCase().includes('already exists')) {
           $('#name-error').text(' This category already exists.');
         } else if (errors.name) {

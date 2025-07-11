@@ -1,3 +1,5 @@
+import random
+from urllib.parse import unquote
 from django.shortcuts import get_object_or_404, render
 from django.http import HttpResponse
 from rest_framework.decorators import  APIView
@@ -45,12 +47,27 @@ class CategoryListAPIView(APIView):
             categories = Category.objects.filter(user=request.user).annotate(item_count=Count('item')).order_by('id')    
         serializer = CategoryListSerializer(categories, many=True)
         return Response(serializer.data)
+    
 class ItemListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
     def get(self, request):
-       category_id = request.GET.get("category_id")
-       items = Item.objects.filter(user=request.user, category_id=category_id)
-       serializer = ItemListSerializer(items, many=True)
-       return Response(serializer.data)
+        category_id = request.GET.get("category_id")
+        search_term = request.GET.get("search", "").strip()
+
+        # Filter based on user and category
+        items = Item.objects.filter(user=request.user, category_id=category_id)
+
+        # Apply search if present
+        if search_term:
+            items = items.filter(name__icontains=search_term)
+
+        paginator = StandardResultsSetPagination()
+        paginated_items = paginator.paginate_queryset(items, request)
+
+        serializer = ItemListSerializer(paginated_items, many=True)
+        return paginator.get_paginated_response(serializer.data)
+
 
 # Add Category
 def add_category(request):
@@ -78,43 +95,43 @@ class AddItemCrudAPIView(APIView):
 # Dashboard Add_Reduce
 def add_reduce_stock_alter(request, category=None, item_name=None, type=None):
     context = {}
-    if category and item_name and type:
-        try:
-            item = Item.objects.filter(
-                name=item_name,
-                category__name=category,
-                user=request.user  # restrict to current user
+    try:
+        category = unquote(category)
+        item_name = unquote(item_name)
+
+        item = Item.objects.filter(
+            name__iexact=item_name,
+            category__name__iexact=category,
             ).first()
 
-            if item:
-                context['c'] = category
-                context['i'] = item_name
-                context['t'] = type
-                context['items'] = item
-            else:
-                context['error'] = "Item not found."
-        except Exception as e:
-            context['error'] = f"Unexpected error: {str(e)}"
-    else:
-        context['error'] = "Invalid URL parameters."
-
+        if item:
+            context['category_name'] = category
+            context['item_name'] = item.name
+            context['transaction_type'] = type
+            context['item_id'] = item.id
+        else:
+            context['error'] = " Item not found for given user/category/name."
+           
+    except Exception as e:
+        context['error'] = f"Unexpected error: {str(e)}"
     return render(request, 'add_reduce_alter.html', context)
 
 
 class DashboardAddReduceCrudAPIView(APIView):
     def post(self, request):
-        serializer = DashboardAddReduceCrudSerializer(data=request.data)
+        serializer = DashboardAddReduceCrudSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Stock updated successfully!"}, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
 
 # Add Reduce Stock
 def add_reduce_stock(request):
     return render(request,'add_reduce_stock.html')
 class AddReduceStockCrudAPIView(APIView):
     def post(self, request):
-        serializer = AddReduceStockCrudSerializer(data=request.data)
+        serializer = AddReduceStockCrudSerializer(data=request.data,context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return Response({"message": "Transaction successful"}, status=status.HTTP_201_CREATED)
@@ -125,9 +142,19 @@ def stock_transaction(request):
        return render(request, "transaction.html")
 
 class StandardResultsSetPagination(PageNumberPagination):
-    page_size = 6  # 6 transactions per page
+    page_size = 3
     page_size_query_param = 'page_size'
     max_page_size = 100
+
+    def get_paginated_response(self, data):
+        return Response({
+            'count': self.page.paginator.count,
+            'page_size': self.page.paginator.per_page,  # 👈 Add this
+            'next': self.get_next_link(),
+            'previous': self.get_previous_link(),
+            'results': data
+        })
+
 
 class TransactionListAPIView(APIView): 
     def get(self, request):
@@ -225,7 +252,7 @@ class ExportItemsCSVAPIView(APIView):
         response['Content-Disposition'] = 'attachment; filename="items.csv"'
 
         writer = csv.writer(response)
-        writer.writerow(['Category', 'Item Name', 'Current Stock'])
+        writer.writerow(['Category','Item_Name', 'Unit','Current_Stock'])
 
         # Query and sort
         items = Item.objects.select_related('category').filter(user=request.user)
@@ -234,7 +261,7 @@ class ExportItemsCSVAPIView(APIView):
         items = items.order_by('category__name', 'name')
 
         for item in items:
-            writer.writerow([item.category.name, item.name, item.current_stock])
+            writer.writerow([item.category.name, item.name, item.unit, item.current_stock])
 
         return response
 
@@ -250,22 +277,31 @@ class CategoryItemCSVImportAPIView(APIView):
 
         for row in rows:
             cat_name = row.get("category", "").strip() or "Unnamed Category"
-            item_name = row.get("name", "").strip() or "Unnamed Item"
+            item_name = row.get("item_name", "").strip() or "Unnamed Item"
             stock = int(row.get("current_stock", 0))
 
-            # Get or create category for the user
+            # ✅ Allow unit to be null
+            unit = row.get("unit", "").strip() or None
+
+            # ✅ Get or create category and always update description if provided
             category, _ = Category.objects.get_or_create(name=cat_name, user=user)
 
-            # Create item if not exists
+            # ✅ Create item if not exists
             if not Item.objects.filter(name=item_name, category=category, user=user).exists():
+                cat_part = cat_name.lower()[:2].ljust(2, 'x')
+                item_part = item_name.lower()[:2].ljust(2, 'x')
+                random_number = str(random.randint(1000, 9999))
+                sku = f"{cat_part}{item_part}{random_number}"
+
                 Item.objects.create(
                     name=item_name,
                     current_stock=stock,
                     category=category,
                     user=user,
-                    sku="SKU0000",  # You can change this to auto-generate
-                    unit="pcs"       # Or make dynamic if available in CSV
+                    sku=sku,
+                    unit=unit
                 )
 
         return Response({"success": True, "message": "Data imported successfully."})
+
 

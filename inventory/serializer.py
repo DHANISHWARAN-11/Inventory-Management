@@ -22,27 +22,24 @@ class ItemListSerializer(serializers.ModelSerializer):  # Dashboard Item List
         model = Item
         fields = "__all__"
 
-from rest_framework import serializers
-from .models import Stock_Transaction
-
 class DashboardAddReduceCrudSerializer(serializers.ModelSerializer):
-    transaction_type = serializers.CharField()
-
     class Meta:
         model = Stock_Transaction
         fields = ['item', 'quantity', 'transaction_type']
 
     def validate(self, data):
-        item = data['item']
-        transaction_type = data['transaction_type']
-        quantity = data['quantity']
+        item = data.get('item')
+        transaction_type = data.get('transaction_type')
+        quantity = data.get('quantity')
 
-        # Normalize bad values early
-        if quantity <= 0:
+        if not item:
+            raise serializers.ValidationError({'item': "Item is required."})
+
+        if quantity is None or quantity <= 0:
             raise serializers.ValidationError({'quantity': "Quantity must be positive."})
 
         if transaction_type not in ['add', 'reduce']:
-            raise serializers.ValidationError({'transaction_type': "Must be 'add' or 'reduce'."})
+            raise serializers.ValidationError({'transaction_type': "Invalid type."})
 
         if transaction_type == 'reduce' and item.current_stock < quantity:
             raise serializers.ValidationError({'quantity': "Not enough stock to reduce."})
@@ -51,28 +48,33 @@ class DashboardAddReduceCrudSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         item = validated_data['item']
-        transaction_type = validated_data['transaction_type']
         quantity = validated_data['quantity']
+        transaction_type = validated_data['transaction_type']
+        request = self.context.get('request')
 
         # Update stock
         if transaction_type == 'add':
             item.current_stock += quantity
-        else:  # reduce
+        elif transaction_type == 'reduce':
             item.current_stock -= quantity
         item.save()
 
-        # Save transaction
+        # ✅ Correct way to generate reference_note
+        reference_note = str(self._generate_reference_note())
+
         return Stock_Transaction.objects.create(
             item=item,
             transaction_type=transaction_type,
             quantity=quantity,
-            reference_note=str(self.generate_reference_note())
+            reference_note=reference_note,
+            user=request.user
+
         )
 
-    def generate_reference_note(self):
+    def _generate_reference_note(self):
         import random
         return random.randint(1000000000, 9999999999)
-
+    
 class AddItemCrudSerializer(serializers.ModelSerializer): # Add Item
     class Meta:
         model = Item
@@ -126,6 +128,7 @@ class AddReduceStockCrudSerializer(serializers.ModelSerializer):
         item = validated_data['item']
         quantity = validated_data['quantity']
         transaction_type = validated_data['transaction_type']
+        request = self.context.get('request')
 
         # Update stock
         if transaction_type == 'add':
@@ -134,17 +137,21 @@ class AddReduceStockCrudSerializer(serializers.ModelSerializer):
             item.current_stock -= quantity
         item.save()
 
+        # ✅ Correct way to generate reference_note
+        reference_note = str(self._generate_reference_note())
+
         return Stock_Transaction.objects.create(
             item=item,
             transaction_type=transaction_type,
             quantity=quantity,
-            reference_note=self.generate_reference_note()
+            reference_note=reference_note,
+            user=request.user
+
         )
 
-    def generate_reference_note(self):
+    def _generate_reference_note(self):
         import random
-        return str(random.randint(1000000000, 9999999999))
-
+        return random.randint(1000000000, 9999999999)
     
 class TransactionListSerializer(serializers.ModelSerializer):  # Transaction List
     item = serializers.CharField(source='item.name')  # shows item name
