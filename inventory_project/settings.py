@@ -148,3 +148,12 @@ SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(days=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
 }
+DEFAULT_FROM_EMAIL = 'dhanishwaranb@gmail.com'
+SITE_URL = 'http://127.0.0.1:8000' 
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'  # or your SMTP provider
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'dhanishwaranb@gmail.com'
+EMAIL_HOST_PASSWORD = 'oesf wqzv lysi gdvn'
+

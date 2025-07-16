@@ -21,6 +21,7 @@ class Item(models.Model):
     unit = models.CharField(max_length=50,blank=True, null=True)
     current_stock = models.IntegerField(default=0)  # allow blank/null, default 0
     created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=10, default='active')  # e.g., 'active', 'inactive' 
     
     def __str__(self):
         return self.name

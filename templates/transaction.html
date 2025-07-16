@@ -1,11 +1,27 @@
 {% extends 'base.html' %}
 {% block content %}
+
 <div class="card mt-5 shadow-sm" id="transactions">
-  <!-- AJAX will inject transaction table here -->
+  <!-- Transactions will be loaded here via AJAX -->
 </div>
+
 <script src="https://cdn.jsdelivr.net/npm/dayjs@1/dayjs.min.js"></script>
 <script>
-  function loadTransactions(pageUrl = '/api/transaction/') {
+  let currentPageSize = 5;
+
+  function getPageNumberFromUrl(nextUrl, prevUrl, currentUrl) {
+    const getPage = (url) => {
+      const match = url?.match(/page=(\d+)/);
+      return match ? parseInt(match[1]) : null;
+    };
+    return (
+      getPage(currentUrl) ||
+      (getPage(nextUrl) ? getPage(nextUrl) - 1 : null) ||
+      (getPage(prevUrl) ? getPage(prevUrl) + 1 : 1)
+    );
+  }
+
+  function loadTransactions(pageUrl = null) {
     const accessToken = localStorage.getItem('access');
     if (!accessToken) {
       alert("You are not logged in. Please login.");
@@ -13,8 +29,10 @@
       return;
     }
 
+    const url = pageUrl || `/api/transaction/?page_size=${currentPageSize}`;
+
     $.ajax({
-      url: pageUrl,
+      url: url,
       method: 'GET',
       headers: {
         'Authorization': 'Bearer ' + accessToken
@@ -23,13 +41,19 @@
         const container = $('#transactions');
 
         if (data.results.length === 0) {
-          container.html('<h4 class="text-center text-muted">No Transactions Done Yet</h4>');
+          container.html('<h4 class="text-center text-muted">No Transactions Found</h4>');
           return;
         }
 
         let html = `
-          <div class="card-header bg-primary text-white">
+          <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Transaction History</h5>
+            <select id="pageSizeSelect" class="form-select form-select-sm" style="width: 100px;">
+              <option value="5">5</option>
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50">50</option>
+            </select>
           </div>
           <div class="card-body">
             <table class="table text-center">
@@ -44,40 +68,68 @@
               </thead>
               <tbody>`;
 
-        data.results.forEach(function (transaction) {
-          const type = transaction.transaction_type === 'add' ? 'bg-success' : 'bg-danger';
-          const dateTime = dayjs(transaction.transaction_date);
-          const date = dateTime.format('DD/MM/YYYY');
-          const time = dateTime.format('HH:mm:ss');
-
+        data.results.forEach(function (t) {
+          const badgeClass = t.transaction_type === 'add' ? 'bg-success' : 'bg-danger';
+          const dateTime = dayjs(t.transaction_date);
           html += `
             <tr>
-              <td>${transaction.item}</td>
-              <td>${transaction.quantity}</td>
-              <td><span class="badge ${type} text-white px-3 py-2 rounded-pill text-uppercase">${transaction.transaction_type}</span></td>
-              <td>${date}</td>
-              <td>${time}</td>
+              <td>${t.item}</td>
+              <td>${t.quantity}</td>
+              <td><span class="badge ${badgeClass} text-white px-3 py-2 rounded-pill text-uppercase">${t.transaction_type}</span></td>
+              <td>${dateTime.format('DD/MM/YYYY')}</td>
+              <td>${dateTime.format('HH:mm:ss')}</td>
             </tr>`;
         });
 
         html += `</tbody></table>`;
 
-        html += `<div class="d-flex justify-content-between mt-3">`;
-        if (data.previous) {
-          html += `<button class="btn btn-secondary" onclick="loadTransactions('${data.previous}')">Previous</button>`;
+        // Pagination buttons
+        const currentPage = getPageNumberFromUrl(data.next, data.previous, url);
+        const totalPages = Math.ceil(data.count / data.page_size);
+
+        html += `
+          <div class="d-flex justify-content-between align-items-center mt-3">
+            <div>
+              ${data.previous
+                ? `<button class="btn btn-sm btn-outline-secondary" onclick="loadTransactions('${data.previous}')">Previous</button>`
+                : `<button class="btn btn-sm btn-outline-secondary" disabled>Previous</button>`}
+            </div>
+            <div class="d-flex justify-content-center gap-1">`;
+
+        for (let i = 1; i <= totalPages; i++) {
+          const pageLink = `/api/transaction/?page=${i}&page_size=${currentPageSize}`;
+          html += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary text-white' : 'btn-outline-primary'}" onclick="loadTransactions('${pageLink}')">${i}</button>`;
         }
-        if (data.next) {
-          html += `<button class="btn btn-secondary ms-auto" onclick="loadTransactions('${data.next}')">Next</button>`;
-        }
+
         html += `</div>
-        <div class="text-center">
-        <a href="/download-stock-report/" class="btn btn-primary">Download Stock Report</a>
-        </div>
+            <div>
+              ${data.next
+                ? `<button class="btn btn-sm btn-outline-secondary" onclick="loadTransactions('${data.next}')">Next</button>`
+                : `<button class="btn btn-sm btn-outline-secondary" disabled>Next</button>`}
+            </div>
+          </div>
+
+          <div class="text-center mt-3">
+            <a href="/download-stock-report/" class="btn btn-primary">Download Stock Report</a>
+          </div>
         </div>`;
 
         container.html(html);
+
+        // Set current page size in dropdown
+        setTimeout(() => {
+          const select = document.getElementById('pageSizeSelect');
+          if (select) {
+            select.value = currentPageSize;
+            select.onchange = function () {
+              currentPageSize = parseInt(select.value);
+              loadTransactions(); // reload from page 1 with new size
+            };
+          }
+        }, 0);
       },
-      error: function () {
+      error: function (xhr) {
+        console.error("Transaction load error", xhr.status, xhr.responseText);
         $('#transactions').html('<p class="text-danger text-center">Failed to load transactions.</p>');
       }
     });
@@ -87,6 +139,5 @@
     loadTransactions();
   });
 </script>
-
 
 {% endblock %}

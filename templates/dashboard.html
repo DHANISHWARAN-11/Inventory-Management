@@ -2,7 +2,7 @@
 {% load static %}
 {% block content %}
 
-<!--  Welcome Section -->
+<!-- Welcome Section -->
 <div class="text-center mt-4">
   <h1 class="fw-bold">Welcome to Mini Inventory Tracker</h1>
   <p class="text-muted">Manage items, add stock, and monitor inventory in real-time.</p>
@@ -15,25 +15,20 @@
   </a>
 </div>
 
-<!-- CSV Upload and Preview Section (Single Line) -->
+<!-- CSV Upload Section -->
 <div class="text-center mt-4 d-flex justify-content-center align-items-center gap-2">
   <label for="categoryItemFile" class="me-2" style="font-weight:600">Upload CSV:</label>
   <input type="file" id="categoryItemFile" accept=".csv" class="form-control w-auto" style="max-width: 300px;">
   <button onclick="uploadCSVToServer()" class="btn btn-info">Upload & Save</button>
 </div>
 
-<!--Download CSV Button -->
-<div class="text-center mt-4">
-  <button onclick="downloadCSV()" class="btn btn-success">Download Items CSV</button>
-</div>
-
-<!-- Category and Item Containers -->
 {% include 'includes/error.html' %}
 <div class="row mt-5" id="category-container"></div>
 <div id="item-container" class="mt-4"></div>
 
-<!-- Scripts -->
+<!-- Script -->
 <script>
+let currentPageSize = 5; // default
 const accessToken = localStorage.getItem('access');
 if (!accessToken) {
   alert("You are not logged in. Please login.");
@@ -64,34 +59,46 @@ $(document).ready(function () {
         container.append(card);
       });
     },
-    error: function (xhr) {
-      if (xhr.status === 401 || xhr.status === 403) {
-        alert("Session expired. Please login again.");
-        localStorage.removeItem("access");
-        localStorage.removeItem("refresh");
-        window.location.href = "/";
-      } else {
-        $('#category-container').html('<p class="text-danger text-center">Failed to load categories.</p>');
-      }
+    error: function () {
+      $('#category-container').html('<p class="text-danger text-center">Failed to load categories.</p>');
     }
   });
+  const savedState = JSON.parse(sessionStorage.getItem("dashboardState"));
+
+if (savedState && savedState.selectedCategoryId && savedState.selectedCategoryName) {
+  currentPageSize = savedState.currentPageSize || 5;
+  loadItems(savedState.selectedCategoryId, savedState.selectedCategoryName, null, savedState.searchValue);
+
+  setTimeout(() => {
+    window.scrollTo(0, savedState.scrollTop || 0);
+    sessionStorage.removeItem("dashboardState");  // Clear after restore
+  }, 500);
+}
+
 });
 
-function getPageNumberFromUrl(nextUrl, prevUrl) {
-  if (nextUrl) {
-    const match = nextUrl.match(/page=(\d+)/);
-    if (match) return parseInt(match[1]) - 1;
-  }
-  if (prevUrl) {
-    const match = prevUrl.match(/page=(\d+)/);
-    if (match) return parseInt(match[1]) + 1;
-  }
-  return 1;
+function getPageNumberFromUrl(nextUrl, prevUrl, currentUrl) {
+  const getPage = (url) => {
+    const match = url?.match(/page=(\d+)/);
+    return match ? parseInt(match[1]) : null;
+  };
+  return (
+    getPage(currentUrl) ||
+    (getPage(nextUrl) ? getPage(nextUrl) - 1 : null) ||
+    (getPage(prevUrl) ? getPage(prevUrl) + 1 : 1)
+  );
 }
 
 function loadItems(categoryId, categoryName, pageUrl = null, searchValue = '') {
+  sessionStorage.setItem("selectedCategoryId", categoryId);
+  sessionStorage.setItem("selectedCategoryName", categoryName);
+
+  // Save to global vars for state tracking
+  window.currentCategoryId = categoryId;
+  window.currentCategoryName = categoryName;
   $('#item-container').html('');
-  const url = pageUrl || `/api/items?category_id=${categoryId}&search=${encodeURIComponent(searchValue)}`;
+  const selectedPageSize = currentPageSize;
+  let url = pageUrl || `/api/items?category_id=${categoryId}&search=${encodeURIComponent(searchValue)}&page_size=${selectedPageSize}`;
 
   $.ajax({
     url: url,
@@ -99,23 +106,21 @@ function loadItems(categoryId, categoryName, pageUrl = null, searchValue = '') {
     headers: { 'Authorization': 'Bearer ' + accessToken },
     success: function (response) {
       const items = response.results;
-      if (items.length === 0) {
-        $('#item-container').html(`
-          <div class="card shadow-sm mt-5 border-0">
-            <div class="card-body text-center py-5">
-              <i class="bi bi-box-seam fs-1 text-secondary mb-3"></i>
-              <h4 class="text-muted">No items found in <strong>${categoryName}</strong> category</h4>
-            </div>
-          </div>
-        `);
-        return;
-      }
 
       let html = `
         <div class="card mt-5 shadow-sm">
           <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
             <h5 class="mb-0">Items in ${categoryName} Category</h5>
-            <input type="text" id="searchInput" class="form-control form-control-sm" style="width:300px" placeholder="Search item..." value="${searchValue}">
+            <div class="d-flex align-items-center gap-2">
+              <input type="text" id="searchInput" class="form-control form-control-sm" style="width:200px" placeholder="Search item..." value="${searchValue}">
+              <select id="pageSizeSelect" class="form-select form-select-sm" style="width: 100px;">
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="75">75</option>
+              </select>
+            </div>
           </div>
           <div class="card-body">
             <table class="table">
@@ -124,61 +129,179 @@ function loadItems(categoryId, categoryName, pageUrl = null, searchValue = '') {
                   <th>Item Name</th>
                   <th>Current Stock</th>
                   <th>Add-Reduce</th>
+                  <th>Actions</th>
                 </tr>
               </thead>
               <tbody>`;
 
-      items.forEach(function (item) {
+      if (items.length === 0) {
         html += `
           <tr>
-            <td>${item.name}</td>
-            <td>${item.current_stock}</td>
-            <td>
-              <a href="/add_reduce_stock/${categoryName}/${item.name}/add/" class="btn btn-sm btn-success">Add</a>
-              <a href="/add_reduce_stock/${categoryName}/${item.name}/reduce/" class="btn btn-sm btn-danger">Reduce</a>
+            <td colspan="3" class="text-center text-muted">
+              <i class=" text-secondary mb-2"></i><br>
+              <div>No items found in <strong>${categoryName}</strong> category</div>
             </td>
           </tr>`;
-      });
+      } else {
+        items.forEach(function (item) {
+          html += `
+            <tr>
+              <td>${item.name}</td>
+              <td>${item.current_stock}</td>
+              <td>
+                <a href="/add_reduce_stock/${categoryName}/${item.name}/add/" class="btn btn-sm btn-success">Add</a>
+                <a href="/add_reduce_stock/${categoryName}/${item.name}/reduce/" class="btn btn-sm btn-danger">Reduce</a>
+              </td>
+              <td>
+              <button class="btn btn-sm btn-outline-primary me-1" onclick="editItem('${item.id}')">✏️</button>
+              <button class="btn btn-sm btn-outline-secondary me-1" onclick="viewItem('${item.id}')">👁️</button>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteItem('${item.id}')">🗑️</button>
+            </td>
+
+            </tr>`;
+        });
+      }
 
       html += `</tbody></table>`;
 
-      const currentPage = getPageNumberFromUrl(response.next, response.previous);
-      const totalPages = Math.ceil(response.count / response.page_size);  // ✅ Correct
+      const currentPage = getPageNumberFromUrl(response.next, response.previous, url);
+      const totalPages = Math.ceil(response.count / response.page_size);
 
-
-     html += `
+      html += `
         <div class="d-flex justify-content-between align-items-center mt-3">
           <div>
             ${response.previous 
-              ? `<button class="btn btn-sm btn-outline-secondary" onclick="loadItems(${categoryId}, '${categoryName}', '${response.previous}', '${searchValue}')">Previous</button>` 
+              ? `<button class="btn btn-sm btn-outline-secondary" onclick="event.preventDefault(); loadItems(${categoryId}, \`${categoryName}\`, \`${response.previous}&page_size=${selectedPageSize}\`, \`${searchValue}\`)">Previous</button>`
               : `<button class="btn btn-sm btn-outline-secondary" disabled>Previous</button>`}
           </div>
+          <div class="d-flex justify-content-center gap-1">`;
 
-          <div class="d-flex justify-content-center gap-1">
-      `;
       for (let i = 1; i <= totalPages; i++) {
-        const pageUrl = `/api/items?category_id=${categoryId}&search=${encodeURIComponent(searchValue)}&page=${i}`;
-        html += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary text-white' : 'btn-outline-primary'}" onclick="loadItems(${categoryId}, '${categoryName}', '${pageUrl}', '${searchValue}')">${i}</button>`;
+        const safePageUrl = `/api/items?category_id=${categoryId}&search=${encodeURIComponent(searchValue)}&page_size=${selectedPageSize}&page=${i}`;
+        html += `<button class="btn btn-sm ${i === currentPage ? 'btn-primary text-white' : 'btn-outline-primary'}" onclick="event.preventDefault(); loadItems(${categoryId}, \`${categoryName}\`, \`${safePageUrl}\`, \`${searchValue}\`)">${i}</button>`;
       }
+
       html += `
           </div>
-
           <div>
             ${response.next 
-              ? `<button class="btn btn-sm btn-outline-secondary" onclick="loadItems(${categoryId}, '${categoryName}', '${response.next}', '${searchValue}')">Next</button>` 
+              ? `<button class="btn btn-sm btn-outline-secondary" onclick="event.preventDefault(); loadItems(${categoryId}, \`${categoryName}\`, \`${response.next}&page_size=${selectedPageSize}\`, \`${searchValue}\`)">Next</button>`
               : `<button class="btn btn-sm btn-outline-secondary" disabled>Next</button>`}
           </div>
         </div>
-      `;
 
+        <div class="text-center mt-3">
+          <button class="btn btn-outline-success" onclick="downloadCategoryItems(${categoryId}, '${categoryName}', '${searchValue}')">
+            Download Items in ${categoryName}
+          </button>
+        </div>
+      </div>`;
 
       $('#item-container').html(html);
+
+      // Re-attach page size and search input logic
+      setTimeout(() => {
+        const select = document.getElementById('pageSizeSelect');
+        if (select) {
+          select.value = currentPageSize;
+          select.onchange = function () {
+            currentPageSize = parseInt(select.value);
+            loadItems(categoryId, categoryName, null, searchValue);
+          };
+        }
+      }, 0);
+
       setupSearchInput(categoryId, categoryName);
     },
     error: function () {
       $('#item-container').html('<p class="text-danger text-center">Failed to load items for this category.</p>');
     }
   });
+}
+
+function uploadCSVToServer() {
+  const fileInput = document.getElementById('categoryItemFile');
+  const file = fileInput.files[0];
+
+  if (!file) {
+    alert("Please select a CSV file.");
+    return;
+  }
+
+  if (!file.name.endsWith('.csv')) {
+    alert("Only CSV files are allowed.");
+    return;
+  }
+
+  const accessToken = localStorage.getItem("access");
+
+  Papa.parse(file, {
+    header: true,
+    skipEmptyLines: true,
+    complete: function (results) {
+      const rows = results.data;
+
+      // Validate structure
+      const requiredFields = ["category", "item_name", "current_stock"];
+      const isValid = rows.every(row =>
+        requiredFields.every(field => row.hasOwnProperty(field))
+      );
+
+      if (!isValid) {
+        alert("CSV is missing required columns (category, item_name, current_stock).");
+        return;
+      }
+
+      fetch("/api/upload-inventory/", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + accessToken
+        },
+        body: JSON.stringify({ rows })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          alert(" CSV uploaded successfully!");
+          location.reload(); // Reload to show new items
+        } else {
+          alert(" Upload failed: " + data.message);
+        }
+      })
+      .catch(error => {
+        alert(" Error uploading CSV.");
+        console.error("Upload Error:", error);
+      });
+    }
+  });
+}
+
+
+function downloadCategoryItems(categoryId, categoryName, searchValue = '') {
+  const url = `/api/export/items/?category_id=${categoryId}&search=${encodeURIComponent(searchValue)}`;
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", url, true);
+  xhr.setRequestHeader("Authorization", "Bearer " + accessToken);
+  xhr.responseType = "blob";
+
+  xhr.onload = function () {
+    if (xhr.status === 200) {
+      const blob = new Blob([xhr.response], { type: 'text/csv' });
+      const link = document.createElement('a');
+      link.href = window.URL.createObjectURL(blob);
+      link.download = `items_${categoryName}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      alert("Failed to download CSV.");
+    }
+  };
+  xhr.onerror = function () {
+    alert("Download error.");
+  };
+  xhr.send();
 }
 
 let debounceTimer;
@@ -195,6 +318,31 @@ function setupSearchInput(categoryId, categoryName) {
     });
   }
 }
+
+function viewItem(itemId) {
+  saveDashboardState();
+  window.location.href = `/item/view/${itemId}/`;
+}
+function editItem(itemId) {
+  saveDashboardState();
+  window.location.href = `/item/edit/${itemId}/`;
+}
+function deleteItem(itemId) {
+  saveDashboardState();
+  window.location.href = `/item/delete/${itemId}/`;
+}
+
+function saveDashboardState() {
+  const state = {
+    scrollTop: window.scrollY,
+    selectedCategoryId: sessionStorage.getItem("selectedCategoryId"),
+    selectedCategoryName: sessionStorage.getItem("selectedCategoryName"),
+    currentPageSize,
+    searchValue: document.getElementById('searchInput')?.value || ''
+  };
+  sessionStorage.setItem("dashboardState", JSON.stringify(state));
+}
+
 </script>
 
 {% endblock %}

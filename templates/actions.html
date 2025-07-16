@@ -1,0 +1,154 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="container mt-5" style="max-width: 600px;">
+  <div id="msg" class="alert text-center" style="display:none;"></div>
+
+  <form id="item-form">
+    <h3 class="text-center mb-4" id="form-title">Item Form</h3>
+
+    <!-- Item Name -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Item Name</label>
+      <input type="text" id="name" class="form-control" disabled>
+    </div>
+
+    <!-- Unit -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Unit</label>
+      <input type="text" id="unit" class="form-control" disabled>
+    </div>
+
+    <!-- Current Stock -->
+    <div class="mb-3">
+      <label class="form-label fw-semibold">Current Stock</label>
+      <input type="number" id="current_stock" class="form-control" disabled>
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100" id="submit-btn" style="display: none;">Submit</button>
+
+    <!-- Back button only in view mode -->
+    <div id="back-btn-container" class="text-center mt-3" style="display: none;">
+      <button onclick="goBackToDashboard()" class="btn btn-secondary">← Back to Dashboard</button>
+    </div>
+  </form>
+</div>
+
+<script>
+const accessToken = localStorage.getItem('access');
+const itemId = "{{ item_id }}";
+const mode = "{{ mode }}";
+let categoryId = null;
+
+$(document).ready(function () {
+  if (!accessToken) {
+    alert("Login required.");
+    window.location.href = "/";
+  }
+
+  fetch(`/api/items/${itemId}/`, {
+    method: 'GET',
+    headers: { 'Authorization': 'Bearer ' + accessToken }
+  })
+  .then(res => res.json())
+  .then(data => {
+    $('#name').val(data.name);
+    $('#unit').val(data.unit || "");
+    $('#current_stock').val(data.current_stock);
+    categoryId = data.category;
+
+    if (mode === "edit") {
+      $('#form-title').text("Edit Item");
+      $('#name, #unit, #current_stock').prop('disabled', false);
+      $('#submit-btn').text("Save").show();
+    } else if (mode === "delete") {
+      $('#form-title').text("Delete Item");
+      $('#submit-btn').text("Confirm Delete").addClass("btn-danger").show();
+    } else {
+      $('#form-title').text("View Item");
+      $('#back-btn-container').show();
+    }
+  });
+
+  $('#item-form').submit(function (e) {
+    e.preventDefault();
+
+    const currentStock = parseInt($('#current_stock').val());
+
+    if (mode === "edit") {
+      const currentStock = parseInt($('#current_stock').val());
+
+      // Check if stock is negative
+      if (currentStock < 0) {
+        $('#msg')
+          .text("Stock cannot be negative.")
+          .removeClass()
+          .addClass("alert alert-danger")
+          .show();
+
+        setTimeout(() => {
+          $('#msg').fadeOut();
+        }, 3000);
+        return;  // ⛔ Don't proceed if invalid
+      }
+
+      const updated = {
+        name: $('#name').val(),
+        unit: $('#unit').val(),
+        current_stock: currentStock,
+        category: categoryId
+      };
+
+      fetch(`/api/items/${itemId}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken
+        },
+        body: JSON.stringify(updated)
+      })
+      .then(res => {
+        if (res.ok) {
+          $('#msg').text(" Item updated!").removeClass().addClass("alert alert-success").show();
+          setTimeout(() => window.location.href = "/dashboard/", 1500);
+        } else {
+          $('#msg').text(" Update failed!").removeClass().addClass("alert alert-danger").show();
+        }
+      });
+
+    } else if (mode === "delete") {
+      const itemName = $('#name').val();
+
+      if (!confirm(`Are you sure you want to delete "${itemName}"?`)) return;
+
+      fetch(`/api/items/${itemId}/`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + accessToken
+        },
+        body: JSON.stringify({
+          name: $('#name').val(),
+          unit: $('#unit').val(),
+          current_stock: currentStock,
+          status: 'inactive',
+          category: categoryId
+        })
+      })
+      .then(res => {
+        if (res.ok) {
+          $('#msg').text(`"${itemName}" marked as inactive.`).removeClass().addClass("alert alert-warning").show();
+          setTimeout(() => window.location.href = "/dashboard/", 1500);
+        } else {
+          $('#msg').text(" Delete failed!").removeClass().addClass("alert alert-danger").show();
+        }
+      });
+    }
+  });
+});
+
+function goBackToDashboard() {
+  const savedState = sessionStorage.getItem("dashboardState");
+  window.location.href = "/dashboard/";
+}
+</script>
+{% endblock %}

@@ -36,11 +36,6 @@ urlpatterns = [
     #dashboard_add_reduce api
     path('api/dashboard_add_reduce_alter/crud/',views.DashboardAddReduceCrudAPIView.as_view(),name='dashboard-add-reduce'),
     
-    #add_reduce_stock template
-    path('add_reduce_stock/',views.add_reduce_stock,name='add_reduce_stock'),
-    #add_reduce_stock api
-    path('api/add_reduce_stock/', views.AddReduceStockCrudAPIView.as_view(), name='api_add_reduce_stock'),
-    
 
     # Report Download
     path('download-stock-report/', views.download_stock_report, name='download_stock_report'),
@@ -55,6 +50,15 @@ urlpatterns = [
 
     #dashboard csv
     path('api/export/items/', views.ExportItemsCSVAPIView.as_view(), name='export_items_csv_api'),
-    path('api/import/categories-items/', views.CategoryItemCSVImportAPIView.as_view(), name='import_csv'),
+    path('api/upload-inventory/', views.CategoryItemCSVImportAPIView.as_view(), name='upload-inventory'),
+
+    # Item detail API
+    path('api/items/<int:pk>/', views.ItemDetailAPIView.as_view(), name='item-detail'),
+
+    path('item/edit/<int:item_id>/', views.edit_item, name='edit_item'),
+    path('item/view/<int:item_id>/', views.view_item, name='view_item'),
+    path('item/delete/<int:item_id>/', views.delete_item, name='delete_item'),
+  
+
 
 ]

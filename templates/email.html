@@ -1,0 +1,38 @@
+{% autoescape off %}
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: Arial, sans-serif; }
+    .highlight { color: red; font-weight: bold; }
+    .highlights {color:green; font-weight: 800;}
+    .button {
+      display: inline-block;
+      background-color: #00d0ffff;
+      padding: 10px 16px;
+      text-decoration: none;
+      border-radius: 5px;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+  <p>Hello <strong>{{ user_name }}</strong>,</p>
+
+  <p>The stock for the item <span class="highlight">{{ item_name }}</span>
+  under the category <strong>{{ category_name }}</strong> has dropped to 
+  <span class="highlight">{{ current_stock }}</span>.</p>
+
+  Please Avoid the current stock below <span class="highlights">{{ minimum_stock}}</span>
+  <p>Please consider restocking this item soon to avoid running out of inventory.</p>
+
+  <p>
+    <a href="{{ dashboard_url }}" class="button">Go to Dashboard</a>
+  </p>
+
+  <br>
+  <p>This is an automated message from Mini Inventory Tracker. Please do not reply.</p>
+</body>
+</html>
+{% endautoescape %}
