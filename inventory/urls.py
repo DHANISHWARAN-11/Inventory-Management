@@ -1,7 +1,7 @@
 from django.urls import path
 from . import views
 from rest_framework_simplejwt.views import TokenObtainPairView
-
+from .views import register_api
 
 urlpatterns = [
     # Login Template
@@ -10,7 +10,11 @@ urlpatterns = [
     path('api/token/',TokenObtainPairView.as_view(),name="Token"),
 
     # Register Form
-    path('register/',views.register, name='register'),
+    # path('register/',views.register, name='register'),
+
+    path('api/register/', views.register_api, name='register'),# Must match Angular URL
+
+
 
     # DashBoard Template
     path('dashboard/',views.dashboard, name='dashboard'),

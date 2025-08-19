@@ -17,21 +17,42 @@ from django.contrib.auth import logout as auth_logout
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.generics import RetrieveUpdateDestroyAPIView
 
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
+from django.contrib.auth.models import User
 
 # Create your views here.
 
-def register(request):
-    form = RegisterForm()
-    if request.method=='POST':
-        form = RegisterForm(request.POST)
-        if form.is_valid():
-            user = form.save(commit=False)
-            password = form.cleaned_data['password1']
-            user.set_password(password)
-            user.save()
-            messages.success(request, "Registered Succesfully")
-            return redirect('login')
-    return render(request, 'register.html',{'form':form})
+# def register(request):
+#     form = RegisterForm()
+#     if request.method=='POST':
+#         form = RegisterForm(request.POST)
+#         if form.is_valid():
+#             user = form.save(commit=False)
+#             password = form.cleaned_data['password1']
+#             user.set_password(password)
+#             user.save()
+#             messages.success(request, "Registered Succesfully")
+#             return redirect('login')
+#     return render(request, 'register.html',{'form':form})
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def register_api(request):
+    name = request.data.get('name')
+    email = request.data.get('email')
+    password = request.data.get('password')
+
+    if not all([name, email, password]):
+        return Response({'message': 'All fields are required'}, status=400)
+
+    if User.objects.filter(email=email).exists():
+        return Response({'message': 'User already exists'}, status=400)
+
+    user = User.objects.create_user(username=name, email=email, password=password)
+    return Response({'message': 'User registered successfully'}, status=201)
+
 
 def login(request):
     return render(request,'login.html')
@@ -99,7 +120,7 @@ def add_category(request):
     return render(request, 'categorys.html')
 class CategoryCrudAPIView(APIView):
     def post(self, request):
-        serializer = CategoryCrudSerializer(data=request.data)
+        serializer = CategoryCrudSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save(created_by=request.user,user=request.user)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -190,76 +211,31 @@ class TransactionListAPIView(APIView):
         return paginator.get_paginated_response(serializer.data)
 
 # Download Report
+from django.utils.timezone import localtime
 def download_stock_report(request):
-       if not request.user.is_authenticated:
-              return redirect('login')
-       response = HttpResponse(content_type='text/csv')
-       response['Content-Disposition'] = 'attachment; filename="stock_report.csv"'
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="stock_report.csv"'
 
-       writer = csv.writer(response)
+    writer = csv.writer(response)
+    writer.writerow(['Item', 'Quantity', 'Type', 'Date', 'Time'])
 
-       # Header
-       writer.writerow(['Item', 'Category', 'Transaction Type', 'Quantity', 'Date'])
+    transactions = Stock_Transaction.objects.all()
+    for tx in transactions:
+        local_dt = localtime(tx.transaction_date)
+        writer.writerow([
+            tx.item.name,
+            tx.quantity,
+            tx.transaction_type,
+            local_dt.strftime('%d-%m-%Y'),  # Proper date
+            local_dt.strftime('%H:%M:%S'),  # Proper time
 
-       # Data rows
-       transactions = Stock_Transaction.objects.select_related('item', 'item__category')
-       for tx in transactions:
-              writer.writerow([
-              tx.item.name,
-              tx.item.category.name,
-              tx.transaction_type,
-              tx.quantity,
-              tx.transaction_date,
-              ])
+        ])
 
-       writer.writerow([])
-       writer.writerow(['--- Summary ---'])
+    return response
 
-       # Aggregates for 'Add'
-       add_queryset = Stock_Transaction.objects.filter(transaction_type='add')
-       add_stats = add_queryset.aggregate(
-              total=Sum('quantity'),
-              count=Count('id'),
-              avg=Avg('quantity'),
-              max_qty=Max('quantity'),
-              min_qty=Min('quantity')
-       )
 
-       # Aggregates for 'Reduce'
-       reduce_queryset = Stock_Transaction.objects.filter(transaction_type='reduce')
-       reduce_stats = reduce_queryset.aggregate(
-              total=Sum('quantity'),
-              count=Count('id'),
-              avg=Avg('quantity'),
-              max_qty=Max('quantity'),
-              min_qty=Min('quantity')
-       )
 
-       # Get item names for max/min
-       add_max_item = add_queryset.filter(quantity=add_stats['max_qty']).first()
-       add_min_item = add_queryset.filter(quantity=add_stats['min_qty']).first()
-       reduce_max_item = reduce_queryset.filter(quantity=reduce_stats['max_qty']).first()
-       reduce_min_item = reduce_queryset.filter(quantity=reduce_stats['min_qty']).first()
 
-       # Write Add section
-       writer.writerow(['Add Transactions'])
-       writer.writerow(['Total Quantity', add_stats['total'] or 0])
-       writer.writerow(['Count', add_stats['count'] or 0])
-       writer.writerow(['Average Quantity', round(add_stats['avg'] or 0, 2)])
-       writer.writerow(['Max Quantity', f"{add_stats['max_qty']} (Item: {add_max_item.item.name if add_max_item else 'N/A'})"])
-       writer.writerow(['Min Quantity', f"{add_stats['min_qty']} (Item: {add_min_item.item.name if add_min_item else 'N/A'})"])
-
-       writer.writerow([])
-
-       # Write Reduce section
-       writer.writerow(['Reduce Transactions'])
-       writer.writerow(['Total Quantity', reduce_stats['total'] or 0])
-       writer.writerow(['Count', reduce_stats['count'] or 0])
-       writer.writerow(['Average Quantity', round(reduce_stats['avg'] or 0, 2)])
-       writer.writerow(['Max Quantity', f"{reduce_stats['max_qty']} (Item: {reduce_max_item.item.name if reduce_max_item else 'N/A'})"])
-       writer.writerow(['Min Quantity', f"{reduce_stats['min_qty']} (Item: {reduce_min_item.item.name if reduce_min_item else 'N/A'})"])
-
-       return response
 
 # Logout
 def logout(request):

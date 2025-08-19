@@ -32,15 +32,18 @@ ALLOWED_HOSTS = []
 # Application definition
 
 INSTALLED_APPS = [
+    'corsheaders', #for angular install app & we should add this in top only
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    #custom apps
     'inventory',
     'rest_framework',
     'rest_framework_simplejwt',
+    
 ]
 
 REST_FRAMEWORK = {
@@ -55,13 +58,15 @@ REST_FRAMEWORK = {
 
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',#for angular install app & we should add this in top only
+    'django.middleware.common.CommonMiddleware', # should be early, but AFTER CORS
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    
 ]
 
 ROOT_URLCONF = 'inventory_project.urls'
@@ -156,4 +161,14 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'dhanishwaranb@gmail.com'
 EMAIL_HOST_PASSWORD = 'oesf wqzv lysi gdvn'
+
+# CORS settings 
+CORS_ALLOW_ALL_ORIGINS = True  # for development
+
+# Alternatively (for production)
+# CORS_ALLOWED_ORIGINS = [
+#     "http://localhost:4200",
+#     "http://127.0.0.1:4200",
+# ]
+
 

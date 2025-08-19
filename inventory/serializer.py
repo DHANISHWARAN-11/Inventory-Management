@@ -18,24 +18,28 @@ class CategoryCrudSerializer(serializers.ModelSerializer):    #add Category
         model = Category
         fields = ['id', 'name', 'description','created_by']
     def validate_name(self,value):
-        if Category.objects.filter(name__iexact=value).exists():
+        request = self.context.get('request')
+        if Category.objects.filter(name__iexact=value,created_by = request.user).exists():
             raise serializers.ValidationError("This category already exists.")
         return value
 
 class ItemListSerializer(serializers.ModelSerializer):  # Dashboard Item List
+    category = CategoryListSerializer(read_only=True)
     class Meta:
         model = Item
         fields = "__all__"
 
 class ItemDetailSerializer(serializers.ModelSerializer):
+    category = CategoryListSerializer(read_only=True)
     class Meta:
         model = Item
-        fields = ['id', 'name', 'unit', 'current_stock', 'category','status']
+        fields = ['id', 'name', 'unit', 'current_stock', 'category','description','status']
 
 class ItemDetailSerializer(serializers.ModelSerializer):
+    category = CategoryListSerializer(read_only=True)
     class Meta:
         model = Item
-        fields = ['id', 'name', 'unit', 'current_stock', 'category', 'status']
+        fields = ['id', 'name', 'unit', 'current_stock', 'category','description', 'status']
 
     def update(self, instance, validated_data):
         request = self.context.get('request')
